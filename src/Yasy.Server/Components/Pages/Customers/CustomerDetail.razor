@@ -1,0 +1,97 @@
+@using Yasy.Core.Entities
+
+<div class="customer-detail-content">
+    <div class="customer-detail-header">
+        <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mb-3">
+            @Customer.FirstName.Take(1)@Customer.LastName.Take(1)
+        </MudAvatar>
+        <MudText Typo="Typo.h4">@Customer.FirstName @Customer.LastName</MudText>
+    </div>
+
+    <MudDivider Class="my-4" />
+
+    <div class="customer-detail-fields">
+        @if (!string.IsNullOrWhiteSpace(Customer.Phone))
+        {
+            <DetailRow Icon="@Icons.Material.Filled.Phone" Label="Telefon" Value="@Customer.Phone"
+                       Href="@($"tel:{Customer.Phone}")" />
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Customer.Email))
+        {
+            <DetailRow Icon="@Icons.Material.Filled.Email" Label="E-Mail" Value="@Customer.Email"
+                       Href="@($"mailto:{Customer.Email}")" />
+        }
+
+        @if (HasAddress)
+        {
+            <div class="detail-row">
+                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Color="Color.Secondary" />
+                <div class="detail-row-content">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Adresse</MudText>
+                    @if (!string.IsNullOrWhiteSpace(Customer.Street))
+                    {
+                        <MudText Typo="Typo.body1">@Customer.Street</MudText>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Customer.ZipCode) || !string.IsNullOrWhiteSpace(Customer.City))
+                    {
+                        <MudText Typo="Typo.body1">@Customer.ZipCode @Customer.City</MudText>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <MudDivider Class="my-4" />
+
+    <div class="customer-detail-actions">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
+                   OnClick="OnEdit">
+            Bearbeiten
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   OnClick="ConfirmDelete">
+            Löschen
+        </MudButton>
+    </div>
+</div>
+
+@if (_showDeleteConfirm)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="10" OnClick="() => _showDeleteConfirm = false">
+        <MudCard Class="pa-4" Style="min-width: 320px;" @onclick:stopPropagation="true">
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Kunde löschen?</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">
+                    <strong>@Customer.FirstName @Customer.LastName</strong> wird unwiderruflich gelöscht.
+                </MudText>
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="() => _showDeleteConfirm = false">Abbrechen</MudButton>
+                <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="OnDeleteConfirmed">Löschen</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudOverlay>
+}
+
+@code {
+    [Parameter, EditorRequired] public Customer Customer { get; set; } = default!;
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    private bool _showDeleteConfirm;
+
+    private bool HasAddress =>
+        !string.IsNullOrWhiteSpace(Customer.Street) ||
+        !string.IsNullOrWhiteSpace(Customer.ZipCode) ||
+        !string.IsNullOrWhiteSpace(Customer.City);
+
+    private void ConfirmDelete() => _showDeleteConfirm = true;
+
+    private async Task OnDeleteConfirmed()
+    {
+        _showDeleteConfirm = false;
+        await OnDelete.InvokeAsync();
+    }
+}

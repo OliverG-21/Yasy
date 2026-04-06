@@ -1,0 +1,189 @@
+@page "/kunden"
+@using Yasy.Core.Entities
+@using Yasy.Core.Interfaces
+@inject ICustomerRepository CustomerRepo
+
+<PageTitle>Yasy - Kunden</PageTitle>
+
+<div class="customer-master-detail">
+    @* Left Panel: Customer List *@
+    <div class="customer-list-panel">
+        <div class="customer-list-header">
+            <MudTextField @bind-Value="_searchTerm" Placeholder="Suchen…" Variant="Variant.Outlined"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" DebounceInterval="300" OnDebounceIntervalElapsed="OnSearchChanged"
+                          Margin="Margin.Dense" Class="search-field" />
+            <MudIconButton Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary"
+                           OnClick="StartNewCustomer" aria-label="Neuer Kunde" />
+        </div>
+
+        <div class="customer-list-items">
+            @if (_customers is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (_customers.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="pa-4" Align="Align.Center" Color="Color.Secondary">
+                    @(_searchTerm?.Length > 0 ? "Keine Treffer" : "Noch keine Kunden vorhanden")
+                </MudText>
+            }
+            else
+            {
+                string? currentLetter = null;
+                @foreach (var customer in _customers)
+                {
+                    var firstLetter = customer.LastName.Length > 0
+                        ? customer.LastName[..1].ToUpper()
+                        : "#";
+
+                    @if (firstLetter != currentLetter)
+                    {
+                        currentLetter = firstLetter;
+                        <div class="letter-divider">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@currentLetter</MudText>
+                        </div>
+                    }
+
+                    <div class="customer-list-item @(customer.Id == _selectedId ? "selected" : "")"
+                         @onclick="() => SelectCustomer(customer)">
+                        <div class="customer-avatar">
+                            <MudAvatar Color="Color.Primary" Size="Size.Medium">
+                                @customer.FirstName.Take(1)@customer.LastName.Take(1)
+                            </MudAvatar>
+                        </div>
+                        <div class="customer-list-info">
+                            <MudText Typo="Typo.body1"><strong>@customer.LastName</strong>, @customer.FirstName</MudText>
+                            @if (!string.IsNullOrWhiteSpace(customer.City))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@customer.City</MudText>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    @* Right Panel: Detail / Edit *@
+    <div class="customer-detail-panel">
+        @if (_isEditing)
+        {
+            <CustomerEdit Customer="_editCustomer" OnSave="OnSaveCustomer" OnCancel="OnCancelEdit" />
+        }
+        else if (_selectedCustomer is not null)
+        {
+            <CustomerDetail Customer="_selectedCustomer" OnEdit="StartEditCustomer" OnDelete="OnDeleteCustomer" />
+        }
+        else
+        {
+            <div class="customer-detail-empty">
+                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-2">Kunden auswählen</MudText>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Customer>? _customers;
+    private Customer? _selectedCustomer;
+    private Customer _editCustomer = new();
+    private Guid? _selectedId;
+    private string? _searchTerm;
+    private bool _isEditing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomersAsync();
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        _customers = string.IsNullOrWhiteSpace(_searchTerm)
+            ? await CustomerRepo.GetAllAsync()
+            : await CustomerRepo.SearchAsync(_searchTerm);
+    }
+
+    private async Task OnSearchChanged(string _)
+    {
+        await LoadCustomersAsync();
+        // Keep selection if still in results
+        if (_selectedId.HasValue && _customers?.All(c => c.Id != _selectedId) == true)
+        {
+            _selectedCustomer = null;
+            _selectedId = null;
+            _isEditing = false;
+        }
+    }
+
+    private void SelectCustomer(Customer customer)
+    {
+        _selectedCustomer = customer;
+        _selectedId = customer.Id;
+        _isEditing = false;
+    }
+
+    private void StartNewCustomer()
+    {
+        _editCustomer = new Customer();
+        _selectedCustomer = null;
+        _selectedId = null;
+        _isEditing = true;
+    }
+
+    private void StartEditCustomer()
+    {
+        if (_selectedCustomer is null) return;
+        _editCustomer = new Customer
+        {
+            Id = _selectedCustomer.Id,
+            FirstName = _selectedCustomer.FirstName,
+            LastName = _selectedCustomer.LastName,
+            Street = _selectedCustomer.Street,
+            ZipCode = _selectedCustomer.ZipCode,
+            City = _selectedCustomer.City,
+            Phone = _selectedCustomer.Phone,
+            Email = _selectedCustomer.Email,
+            CreatedAt = _selectedCustomer.CreatedAt
+        };
+        _isEditing = true;
+    }
+
+    private async Task OnSaveCustomer(Customer customer)
+    {
+        if (customer.Id == Guid.Empty)
+        {
+            var created = await CustomerRepo.AddAsync(customer);
+            _selectedId = created.Id;
+        }
+        else
+        {
+            await CustomerRepo.UpdateAsync(customer);
+            _selectedId = customer.Id;
+        }
+
+        await LoadCustomersAsync();
+        _selectedCustomer = _customers?.FirstOrDefault(c => c.Id == _selectedId);
+        _isEditing = false;
+    }
+
+    private async Task OnDeleteCustomer()
+    {
+        if (_selectedCustomer is null) return;
+        await CustomerRepo.DeleteAsync(_selectedCustomer.Id);
+        _selectedCustomer = null;
+        _selectedId = null;
+        _isEditing = false;
+        await LoadCustomersAsync();
+    }
+
+    private void OnCancelEdit()
+    {
+        _isEditing = false;
+        if (_selectedId == null || _selectedId == Guid.Empty)
+        {
+            _selectedCustomer = null;
+        }
+    }
+}

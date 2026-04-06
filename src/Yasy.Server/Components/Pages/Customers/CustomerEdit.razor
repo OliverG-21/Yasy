@@ -1,0 +1,71 @@
+@using Yasy.Core.Entities
+
+<EditForm Model="Customer" OnValidSubmit="HandleSave" FormName="customerEdit">
+    <DataAnnotationsValidator />
+
+    <div class="customer-detail-content">
+        <div class="customer-detail-header">
+            <MudAvatar Color="Color.Surface" Size="Size.Large" Class="mb-3" Variant="Variant.Outlined">
+                <MudIcon Icon="@Icons.Material.Filled.Person" />
+            </MudAvatar>
+            <MudText Typo="Typo.h5">
+                @(Customer.Id == Guid.Empty ? "Neuer Kunde" : "Kunde bearbeiten")
+            </MudText>
+        </div>
+
+        <MudDivider Class="my-4" />
+
+        <div class="customer-edit-fields">
+            <MudTextField @bind-Value="Customer.FirstName" Label="Vorname" Required="true"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="Customer.LastName" Label="Nachname" Required="true"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+            <MudDivider Class="my-3" />
+
+            <MudTextField @bind-Value="Customer.Street" Label="Straße"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <div class="zip-city-row">
+                <MudTextField @bind-Value="Customer.ZipCode" Label="PLZ"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="zip-field" />
+                <MudTextField @bind-Value="Customer.City" Label="Ort"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="city-field" />
+            </div>
+
+            <MudDivider Class="my-3" />
+
+            <MudTextField @bind-Value="Customer.Phone" Label="Telefon" InputType="InputType.Telephone"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="Customer.Email" Label="E-Mail" InputType="InputType.Email"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </div>
+
+        <MudDivider Class="my-4" />
+
+        <div class="customer-detail-actions">
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save">
+                Speichern
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="HandleCancel">
+                Abbrechen
+            </MudButton>
+        </div>
+    </div>
+</EditForm>
+
+@code {
+    [Parameter, EditorRequired] public Customer Customer { get; set; } = default!;
+    [Parameter] public EventCallback<Customer> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task HandleSave()
+    {
+        await OnSave.InvokeAsync(Customer);
+    }
+
+    private async Task HandleCancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+}

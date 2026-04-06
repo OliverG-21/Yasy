@@ -1,0 +1,21 @@
+<div class="detail-row">
+    <MudIcon Icon="@Icon" Size="Size.Small" Color="Color.Secondary" />
+    <div class="detail-row-content">
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@Label</MudText>
+        @if (!string.IsNullOrWhiteSpace(Href))
+        {
+            <MudLink Href="@Href" Typo="Typo.body1">@Value</MudLink>
+        }
+        else
+        {
+            <MudText Typo="Typo.body1">@Value</MudText>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = default!;
+    [Parameter, EditorRequired] public string Label { get; set; } = default!;
+    [Parameter, EditorRequired] public string Value { get; set; } = default!;
+    [Parameter] public string? Href { get; set; }
+}
