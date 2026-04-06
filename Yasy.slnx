@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Yasy.Core/Yasy.Core.csproj" />
+    <Project Path="src/Yasy.Infrastructure/Yasy.Infrastructure.csproj" />
+    <Project Path="src/Yasy.Server/Yasy.Server.csproj" />
+    <Project Path="src/Yasy.Shared/Yasy.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Yasy.Tests/Yasy.Tests.csproj" />
+  </Folder>
+</Solution>

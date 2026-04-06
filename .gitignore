@@ -1,0 +1,25 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+*.sln.docstates
+.vs/
+
+## Rider
+.idea/
+
+## VS Code
+.vscode/
+
+## macOS
+.DS_Store
+
+## Docker
+docker/.env
+
+## Build
+publish/
+out/
+.claude/
