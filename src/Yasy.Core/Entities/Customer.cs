@@ -10,6 +10,9 @@ public class Customer
     public string? City { get; set; }
     public string? Phone { get; set; }
     public string? Email { get; set; }
+    public DateOnly? Birthday { get; set; }
+    public DateOnly? InitialRegistration { get; set; }
+    public string? ProfileImagePath { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

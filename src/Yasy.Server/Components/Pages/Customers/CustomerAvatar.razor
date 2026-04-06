@@ -1,0 +1,35 @@
+@using Yasy.Core.Entities
+
+@if (!string.IsNullOrWhiteSpace(Customer.ProfileImagePath))
+{
+    <MudAvatar Size="@Size" Class="@Class">
+        <MudImage Src="@($"/api/images/{Customer.ProfileImagePath}")" Alt="@Alt"
+                  Width="@Dimension" Height="@Dimension" ObjectFit="ObjectFit.Cover" />
+    </MudAvatar>
+}
+else
+{
+    <MudAvatar Color="@Color" Size="@Size" Class="@Class">
+        @Initials
+    </MudAvatar>
+}
+
+@code {
+    [Parameter, EditorRequired] public Customer Customer { get; set; } = default!;
+    [Parameter] public Size Size { get; set; } = Size.Medium;
+    [Parameter] public Color Color { get; set; } = Color.Primary;
+    [Parameter] public string? Class { get; set; }
+
+    private string Initials =>
+        $"{(Customer.FirstName.Length > 0 ? Customer.FirstName[..1] : "")}{(Customer.LastName.Length > 0 ? Customer.LastName[..1] : "")}";
+
+    private string Alt => $"{Customer.FirstName} {Customer.LastName}";
+
+    private int Dimension => Size switch
+    {
+        Size.Small => 32,
+        Size.Medium => 40,
+        Size.Large => 56,
+        _ => 40
+    };
+}

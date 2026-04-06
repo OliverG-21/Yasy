@@ -1,6 +1,8 @@
 @inherits LayoutComponentBase
 
-<MudThemeProvider @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
+<MudThemeProvider @ref="_themeProvider" IsDarkMode="_isDarkMode"
+                  IsDarkModeChanged="OnDarkModeChanged"
+                  ObserveSystemDarkModeChange="true" Theme="_theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -29,21 +31,62 @@
 @code {
     private bool _drawerOpen = true;
     private bool _isDarkMode;
+    private MudThemeProvider _themeProvider = default!;
 
     private readonly MudTheme _theme = new()
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#1976D2",
-            Secondary = "#FF9800",
-            AppbarBackground = "#1976D2"
+            Primary = "#727c66",
+            Secondary = "#b4cc60",
+            Tertiary = "#8e9288",
+            AppbarBackground = "#727c66",
+            AppbarText = "#fbf9f4",
+            Background = "#fbf9f4",
+            Surface = "#ffffff",
+            DrawerBackground = "#ffffff",
+            DrawerText = "#313131",
+            TextPrimary = "#313131",
+            TextSecondary = "#737e6c",
+            ActionDefault = "#727c66",
+            ActionDisabled = "#d2d8d3",
+            LinesDefault = "#d2d8d3",
+            LinesInputs = "#8e9288",
+            Divider = "#d2d8d3"
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#90CAF9",
-            Secondary = "#FFB74D"
+            Primary = "#8e9288",
+            Secondary = "#b4cc60",
+            Tertiary = "#727c66",
+            AppbarBackground = "#272926",
+            AppbarText = "#fbf9f4",
+            Background = "#1a1b19",
+            Surface = "#272926",
+            DrawerBackground = "#272926",
+            DrawerText = "#d2d8d3",
+            TextPrimary = "#fbf9f4",
+            TextSecondary = "#8e9288",
+            ActionDefault = "#8e9288",
+            ActionDisabled = "#3a3c38",
+            LinesDefault = "#3a3c38",
+            LinesInputs = "#4a4d47",
+            Divider = "#3a3c38"
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = ["Roboto", "Helvetica", "Arial", "sans-serif"]
+            }
         }
     };
+
+    private void OnDarkModeChanged(bool isDark)
+    {
+        _isDarkMode = isDark;
+        StateHasChanged();
+    }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
     private void ToggleDarkMode() => _isDarkMode = !_isDarkMode;

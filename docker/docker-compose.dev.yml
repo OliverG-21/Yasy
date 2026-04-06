@@ -1,3 +1,5 @@
+name: yasy
+
 services:
   db:
     image: postgres:17

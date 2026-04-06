@@ -1,6 +1,75 @@
 @page "/"
+@using Yasy.Core.Entities
+@using Yasy.Core.Interfaces
+@using Yasy.Server.Components.Pages.Customers
+@inject ICustomerRepository CustomerRepo
 
 <PageTitle>Yasy - Dashboard</PageTitle>
 
-<MudText Typo="Typo.h3" GutterBottom="true">Willkommen bei Yasy</MudText>
-<MudText Typo="Typo.body1">Kursverwaltung und Kundenmanagement</MudText>
+<MudText Typo="Typo.h3" GutterBottom="true">Dashboard</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6" lg="4">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">
+                        <MudIcon Icon="@Icons.Material.Filled.Cake" Class="mr-2" Size="Size.Small" />
+                        Geburtstage in den nächsten 7 Tagen
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent Class="pa-0">
+                @if (_birthdayCustomers is null)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_birthdayCustomers.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="pa-4" Align="Align.Center" Color="Color.Secondary">
+                        Keine Geburtstage in den nächsten 7 Tagen
+                    </MudText>
+                }
+                else
+                {
+                    <MudList T="Customer" Dense="true">
+                        @foreach (var customer in _birthdayCustomers)
+                        {
+                            var bday = customer.Birthday!.Value;
+                            var thisYear = new DateOnly(DateTime.Today.Year, bday.Month, bday.Day);
+                            if (thisYear < DateOnly.FromDateTime(DateTime.Today))
+                                thisYear = new DateOnly(DateTime.Today.Year + 1, bday.Month, bday.Day);
+                            var daysUntil = thisYear.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber;
+                            var turnsAge = thisYear.Year - bday.Year;
+
+                            <MudListItem T="Customer">
+                                <div class="d-flex align-center gap-3">
+                                    <CustomerAvatar Customer="customer" Size="Size.Small" />
+                                    <div class="flex-grow-1">
+                                        <MudText Typo="Typo.body1">@customer.FirstName @customer.LastName</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @bday.ToString("dd.MM.yyyy") — @turnsAge. Geburtstag
+                                        </MudText>
+                                    </div>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(daysUntil == 0 ? Color.Secondary : Color.Default)">
+                                        @(daysUntil == 0 ? "Heute!" : $"in {daysUntil} Tag{(daysUntil > 1 ? "en" : "")}")
+                                    </MudChip>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<Customer>? _birthdayCustomers;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _birthdayCustomers = await CustomerRepo.GetUpcomingBirthdaysAsync();
+    }
+}

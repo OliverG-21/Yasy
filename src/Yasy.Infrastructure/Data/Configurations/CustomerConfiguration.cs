@@ -21,6 +21,9 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.Phone).HasMaxLength(30);
         builder.Property(c => c.Email).HasMaxLength(200);
 
+        builder.Property(c => c.Birthday);
+        builder.Property(c => c.InitialRegistration);
+        builder.Property(c => c.ProfileImagePath).HasMaxLength(500);
         builder.Property(c => c.CreatedAt).HasDefaultValueSql("now()");
 
         builder.HasIndex(c => new { c.LastName, c.FirstName });

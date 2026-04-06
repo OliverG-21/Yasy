@@ -1,25 +1,51 @@
 @using Yasy.Core.Entities
+@using Yasy.Core.Interfaces
+@inject IProfileImageService ImageService
 
-<EditForm Model="Customer" OnValidSubmit="HandleSave" FormName="customerEdit">
-    <DataAnnotationsValidator />
-
-    <div class="customer-detail-content">
-        <div class="customer-detail-header">
-            <MudAvatar Color="Color.Surface" Size="Size.Large" Class="mb-3" Variant="Variant.Outlined">
-                <MudIcon Icon="@Icons.Material.Filled.Person" />
-            </MudAvatar>
-            <MudText Typo="Typo.h5">
-                @(Customer.Id == Guid.Empty ? "Neuer Kunde" : "Kunde bearbeiten")
-            </MudText>
+<div class="customer-detail-content">
+    <div class="customer-detail-header">
+        <div class="avatar-upload">
+            @if (_imagePreview is not null)
+            {
+                <MudAvatar Size="Size.Large" Class="mb-2">
+                    <MudImage Src="@_imagePreview" Width="56" Height="56" ObjectFit="ObjectFit.Cover" />
+                </MudAvatar>
+            }
+            else if (!string.IsNullOrWhiteSpace(Customer.ProfileImagePath))
+            {
+                <CustomerAvatar Customer="Customer" Size="Size.Large" Class="mb-2" />
+            }
+            else
+            {
+                <MudAvatar Color="Color.Surface" Size="Size.Large" Class="mb-2" Variant="Variant.Outlined">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" />
+                </MudAvatar>
+            }
+            <MudFileUpload T="IBrowserFile" Accept=".jpg,.jpeg,.png,.webp" FilesChanged="OnImageSelected"
+                           Class="mt-0">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.CameraAlt">
+                        Foto ändern
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
         </div>
+        <MudText Typo="Typo.h5">
+            @(Customer.Id == Guid.Empty ? "Neuer Kunde" : "Kunde bearbeiten")
+        </MudText>
+    </div>
 
-        <MudDivider Class="my-4" />
+    <MudDivider Class="my-4" />
 
+    <MudForm @ref="_form">
         <div class="customer-edit-fields">
             <MudTextField @bind-Value="Customer.FirstName" Label="Vorname" Required="true"
-                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+                          RequiredError="Vorname ist erforderlich"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
             <MudTextField @bind-Value="Customer.LastName" Label="Nachname" Required="true"
-                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+                          RequiredError="Nachname ist erforderlich"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
 
             <MudDivider Class="my-3" />
 
@@ -38,30 +64,89 @@
                           Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudTextField @bind-Value="Customer.Email" Label="E-Mail" InputType="InputType.Email"
                           Variant="Variant.Outlined" Margin="Margin.Dense" />
-        </div>
 
-        <MudDivider Class="my-4" />
+            <MudDivider Class="my-3" />
 
-        <div class="customer-detail-actions">
-            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Save">
-                Speichern
-            </MudButton>
-            <MudButton Variant="Variant.Outlined" OnClick="HandleCancel">
-                Abbrechen
-            </MudButton>
+            <MudDatePicker @bind-Date="_birthday" Label="Geburtstag"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           DateFormat="dd.MM.yyyy" Placeholder="TT.MM.JJJJ"
+                           Editable="true" />
+            <MudDatePicker @bind-Date="_initialRegistration" Label="Erstanmeldung"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           DateFormat="dd.MM.yyyy" Placeholder="TT.MM.JJJJ"
+                           Editable="true" />
         </div>
+    </MudForm>
+
+    <MudDivider Class="my-4" />
+
+    <div class="customer-detail-actions">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Save" OnClick="HandleSave">
+            Speichern
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="HandleCancel">
+            Abbrechen
+        </MudButton>
     </div>
-</EditForm>
+</div>
 
 @code {
     [Parameter, EditorRequired] public Customer Customer { get; set; } = default!;
     [Parameter] public EventCallback<Customer> OnSave { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
+    private MudForm _form = default!;
+    private DateTime? _birthday;
+    private DateTime? _initialRegistration;
+    private IBrowserFile? _selectedImage;
+    private string? _imagePreview;
+
+    protected override void OnParametersSet()
+    {
+        _birthday = Customer.Birthday?.ToDateTime(TimeOnly.MinValue);
+        _initialRegistration = Customer.InitialRegistration?.ToDateTime(TimeOnly.MinValue);
+        _selectedImage = null;
+        _imagePreview = null;
+    }
+
+    private async Task OnImageSelected(IBrowserFile file)
+    {
+        _selectedImage = file;
+        // Generate preview
+        var buffer = new byte[file.Size];
+        await using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+        var bytesRead = await stream.ReadAsync(buffer);
+        _imagePreview = $"data:{file.ContentType};base64,{Convert.ToBase64String(buffer, 0, bytesRead)}";
+    }
+
     private async Task HandleSave()
     {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        Customer.Birthday = _birthday.HasValue
+            ? DateOnly.FromDateTime(_birthday.Value)
+            : null;
+        Customer.InitialRegistration = _initialRegistration.HasValue
+            ? DateOnly.FromDateTime(_initialRegistration.Value)
+            : null;
+
+        // Save image if selected (need ID first for new customers)
+        if (_selectedImage is not null && Customer.Id != Guid.Empty)
+        {
+            await using var stream = _selectedImage.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            Customer.ProfileImagePath = await ImageService.SaveAsync(Customer.Id, _selectedImage.Name, stream);
+        }
+
         await OnSave.InvokeAsync(Customer);
+
+        // For new customers, save image after ID is assigned
+        if (_selectedImage is not null && Customer.Id != Guid.Empty && string.IsNullOrWhiteSpace(Customer.ProfileImagePath))
+        {
+            await using var stream = _selectedImage.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            Customer.ProfileImagePath = await ImageService.SaveAsync(Customer.Id, _selectedImage.Name, stream);
+        }
     }
 
     private async Task HandleCancel()

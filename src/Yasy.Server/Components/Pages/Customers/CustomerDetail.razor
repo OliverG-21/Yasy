@@ -2,9 +2,7 @@
 
 <div class="customer-detail-content">
     <div class="customer-detail-header">
-        <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mb-3">
-            @Customer.FirstName.Take(1)@Customer.LastName.Take(1)
-        </MudAvatar>
+        <CustomerAvatar Customer="Customer" Size="Size.Large" Class="mb-3" />
         <MudText Typo="Typo.h4">@Customer.FirstName @Customer.LastName</MudText>
     </div>
 
@@ -21,6 +19,18 @@
         {
             <DetailRow Icon="@Icons.Material.Filled.Email" Label="E-Mail" Value="@Customer.Email"
                        Href="@($"mailto:{Customer.Email}")" />
+        }
+
+        @if (Customer.Birthday.HasValue)
+        {
+            <DetailRow Icon="@Icons.Material.Filled.Cake" Label="Geburtstag"
+                       Value="@Customer.Birthday.Value.ToString("dd.MM.yyyy")" />
+        }
+
+        @if (Customer.InitialRegistration.HasValue)
+        {
+            <DetailRow Icon="@Icons.Material.Filled.CalendarMonth" Label="Erstanmeldung"
+                       Value="@Customer.InitialRegistration.Value.ToString("dd.MM.yyyy")" />
         }
 
         @if (HasAddress)

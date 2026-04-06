@@ -22,4 +22,7 @@ docker/.env
 ## Build
 publish/
 out/
+
+## App data (uploaded files)
+src/Yasy.Server/data/
 .claude/

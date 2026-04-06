@@ -2,6 +2,7 @@
 @using Yasy.Core.Entities
 @using Yasy.Core.Interfaces
 @inject ICustomerRepository CustomerRepo
+@inject IProfileImageService ImageService
 
 <PageTitle>Yasy - Kunden</PageTitle>
 
@@ -48,9 +49,7 @@
                     <div class="customer-list-item @(customer.Id == _selectedId ? "selected" : "")"
                          @onclick="() => SelectCustomer(customer)">
                         <div class="customer-avatar">
-                            <MudAvatar Color="Color.Primary" Size="Size.Medium">
-                                @customer.FirstName.Take(1)@customer.LastName.Take(1)
-                            </MudAvatar>
+                            <CustomerAvatar Customer="customer" Size="Size.Medium" />
                         </div>
                         <div class="customer-list-info">
                             <MudText Typo="Typo.body1"><strong>@customer.LastName</strong>, @customer.FirstName</MudText>
@@ -145,6 +144,9 @@
             City = _selectedCustomer.City,
             Phone = _selectedCustomer.Phone,
             Email = _selectedCustomer.Email,
+            Birthday = _selectedCustomer.Birthday,
+            InitialRegistration = _selectedCustomer.InitialRegistration,
+            ProfileImagePath = _selectedCustomer.ProfileImagePath,
             CreatedAt = _selectedCustomer.CreatedAt
         };
         _isEditing = true;
@@ -156,6 +158,12 @@
         {
             var created = await CustomerRepo.AddAsync(customer);
             _selectedId = created.Id;
+            // ProfileImagePath may have been set by CustomerEdit after save
+            if (!string.IsNullOrWhiteSpace(customer.ProfileImagePath))
+            {
+                created.ProfileImagePath = customer.ProfileImagePath;
+                await CustomerRepo.UpdateAsync(created);
+            }
         }
         else
         {
