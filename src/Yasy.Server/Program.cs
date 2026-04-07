@@ -4,6 +4,7 @@ using Yasy.Core.Interfaces;
 using Yasy.Infrastructure;
 using Yasy.Infrastructure.Data;
 using Yasy.Server.Components;
+using Yasy.Server.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 var dataPath = builder.Configuration["DataPath"]
     ?? Path.Combine(builder.Environment.ContentRootPath, "data");
 builder.Services.AddInfrastructure(connectionString, dataPath);
+builder.Services.AddScoped<CalendarService>();
 
 var app = builder.Build();
 

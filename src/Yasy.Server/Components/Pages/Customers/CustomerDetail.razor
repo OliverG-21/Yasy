@@ -1,4 +1,11 @@
 @using Yasy.Core.Entities
+@using Yasy.Core.Interfaces
+@using Yasy.Shared.Enums
+@inject ICourseEnrollmentRepository EnrollmentRepo
+@inject ICourseRepository CourseRepo
+@inject ICourseCardRepository CardRepo
+@inject IAttendanceRepository AttendanceRepo
+@inject ICustomerRepository CustomerRepo
 
 <div class="customer-detail-content">
     <div class="customer-detail-header">
@@ -54,6 +61,189 @@
 
     <MudDivider Class="my-4" />
 
+    @* Kurse & Workshops *@
+    <div class="d-flex align-center justify-space-between mb-2">
+        <MudText Typo="Typo.subtitle1"><strong>Kurse & Workshops</strong></MudText>
+        <div class="d-flex align-center gap-1">
+            <MudToggleIconButton @bind-Toggled="_showHistory"
+                                 Icon="@Icons.Material.Filled.History" ToggledIcon="@Icons.Material.Filled.History"
+                                 Size="Size.Small" Color="Color.Default" ToggledColor="Color.Primary"
+                                 Title="Historie anzeigen" />
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Size="Size.Small"
+                           OnClick="() => _showAddCourse = true" />
+        </div>
+    </div>
+
+    @if (_enrollments is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        var visible = _showHistory ? _enrollments : _enrollments.Where(e => e.UnenrolledAt == null).ToList();
+        if (visible.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                @(_showHistory ? "Keine Anmeldungen in der Historie" : "Keine Anmeldungen vorhanden")
+            </MudText>
+        }
+        else
+        {
+            <MudList T="CourseEnrollment" Dense="true" Class="mb-4">
+                @foreach (var enrollment in visible)
+                {
+                    var e = enrollment;
+                    <MudListItem T="CourseEnrollment" Icon="@(e.Course.Type == CourseType.Workshop ? Icons.Material.Filled.Event : Icons.Material.Filled.Loop)">
+                        <div class="d-flex align-center justify-space-between" style="width:100%;">
+                            <div style="@(e.UnenrolledAt.HasValue ? "opacity: 0.5;" : "")">
+                                <div class="d-flex align-center gap-2">
+                                    <MudText Typo="Typo.body2">@e.Course.Name</MudText>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(e.Course.Type == CourseType.Workshop ? Color.Warning : Color.Info)">
+                                        @(e.Course.Type == CourseType.Workshop ? "Workshop" : "Kurs")
+                                    </MudChip>
+                                </div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Angemeldet am @e.EnrolledAt.ToString("dd.MM.yyyy")
+                                    @if (e.UnenrolledAt.HasValue)
+                                    {
+                                        <span> · Abgemeldet am @e.UnenrolledAt.Value.ToString("dd.MM.yyyy")</span>
+                                    }
+                                </MudText>
+                            </div>
+                            @if (!e.UnenrolledAt.HasValue)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline" Color="Color.Error" Size="Size.Small"
+                                               OnClick="() => UnenrollFromCourse(e)" Title="Abmelden" />
+                            }
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    }
+
+    <MudDivider Class="my-4" />
+
+    @* Guthabenkarten *@
+    <div class="d-flex align-center justify-space-between mb-2">
+        <MudText Typo="Typo.subtitle1"><strong>Guthabenkarten</strong></MudText>
+        <div class="d-flex align-center gap-1">
+            <MudToggleIconButton @bind-Toggled="_showCardHistory"
+                                 Icon="@Icons.Material.Filled.History" ToggledIcon="@Icons.Material.Filled.History"
+                                 Size="Size.Small" Color="Color.Default" ToggledColor="Color.Primary"
+                                 Title="Kartenhistorie anzeigen" />
+            <MudIconButton Icon="@Icons.Material.Filled.AddCard" Color="Color.Primary" Size="Size.Small"
+                           OnClick="() => _showBuyCard = true" Title="Karte kaufen" />
+        </div>
+    </div>
+
+    @if (_cards is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        var visibleCards = _showCardHistory ? _cards : _cards.Where(c => !c.ExhaustedAt.HasValue).ToList();
+        if (visibleCards.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                @(_showCardHistory ? "Keine Karten in der Historie" : "Keine aktiven Guthabenkarten")
+            </MudText>
+        }
+        else
+        {
+            @foreach (var card in visibleCards)
+            {
+                var c = card;
+                var isExhausted = c.ExhaustedAt.HasValue;
+                <MudCard Class="mb-3" Elevation="1" Style="@(isExhausted ? "opacity: 0.5;" : "")">
+                    <MudCardContent Class="pb-1">
+                        <div class="d-flex align-center justify-space-between">
+                            <div class="d-flex align-center gap-2">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                    @(c.Type == CardType.FiveCard ? "5er-Karte" : "10er-Karte")
+                                </MudChip>
+                                <MudText Typo="Typo.body2">@c.PricePaid.ToString("0.00") €</MudText>
+                            </div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Gekauft am @c.PurchasedAt.ToString("dd.MM.yyyy")
+                            </MudText>
+                        </div>
+                        <div class="mt-2">
+                            <div class="d-flex align-center justify-space-between mb-1">
+                                <MudText Typo="Typo.caption">@c.UsedVisits von @c.TotalVisits Besuchen verbraucht</MudText>
+                                @if (isExhausted)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Error">Aufgebraucht am @c.ExhaustedAt!.Value.ToString("dd.MM.yyyy")</MudText>
+                                }
+                            </div>
+                            <MudProgressLinear Value="@c.UsedVisits" Max="@c.TotalVisits" Color="@(isExhausted ? Color.Default : Color.Primary)"
+                                               Size="Size.Medium" Rounded="true" />
+                        </div>
+                        @if (c.Usages.Count > 0)
+                        {
+                            <MudExpansionPanel Text="Nutzungsverlauf" Dense="true" Class="mt-2" Elevation="0"
+                                                Style="background: transparent;">
+                                @foreach (var usage in c.Usages.OrderByDescending(u => u.UsedAt))
+                                {
+                                    <div class="d-flex align-center gap-2 py-1">
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" />
+                                        <MudText Typo="Typo.caption">
+                                            @usage.UsedAt.ToString("dd.MM.yyyy")
+                                            @if (usage.Course is not null)
+                                            {
+                                                <span> · @usage.Course.Name</span>
+                                            }
+                                            @if (usage.UsedByCustomer is not null)
+                                            {
+                                                <span style="color: var(--mud-palette-warning);"> · genutzt von @usage.UsedByCustomer.FirstName @usage.UsedByCustomer.LastName</span>
+                                            }
+                                        </MudText>
+                                    </div>
+                                }
+                            </MudExpansionPanel>
+                        }
+                        @* Shared with *@
+                        <div class="d-flex align-center gap-2 mt-2">
+                            <MudIcon Icon="@Icons.Material.Filled.PeopleAlt" Size="Size.Small" Color="Color.Secondary" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Geteilt mit:</MudText>
+                            @if (c.SharedWith.Count == 0)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">–</MudText>
+                            }
+                            else
+                            {
+                                @foreach (var share in c.SharedWith)
+                                {
+                                    var s = share;
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default"
+                                             OnClose="() => RemoveSharing(c.Id, s.CustomerId)">
+                                        @s.Customer.FirstName @s.Customer.LastName
+                                    </MudChip>
+                                }
+                            }
+                            <MudIconButton Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Small" Color="Color.Primary"
+                                           OnClick="() => StartAddSharing(c)" Title="Mitnutzer hinzufügen" />
+                        </div>
+                    </MudCardContent>
+                    @if (!isExhausted)
+                    {
+                        <MudCardActions>
+                            <MudButton StartIcon="@Icons.Material.Filled.RemoveCircle" Color="Color.Primary"
+                                       Variant="Variant.Text" Size="Size.Small"
+                                       OnClick="() => StartUsage(c)">
+                                Besuch abbuchen
+                            </MudButton>
+                        </MudCardActions>
+                    }
+                </MudCard>
+            }
+        }
+    }
+
+    <MudDivider Class="my-4" />
+
     <div class="customer-detail-actions">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
                    OnClick="OnEdit">
@@ -85,17 +275,408 @@
     </MudOverlay>
 }
 
+@if (_showAddCourse)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="10" OnClick="() => _showAddCourse = false">
+        <MudCard Class="pa-4" Style="min-width: 400px;" @onclick:stopPropagation="true">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-3">Kurs zuweisen</MudText>
+                <MudAutocomplete T="Course" Label="Kurs suchen" @bind-Value="_selectedCourse"
+                                 SearchFunc="SearchCourses" ToStringFunc="@(c => c is null ? "" : c.Name)"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3"
+                                 ShowProgressIndicator="true" />
+                <MudDatePicker @bind-Date="_enrollmentDate" Label="Anmeldedatum"
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               DateFormat="dd.MM.yyyy" Editable="true" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="() => _showAddCourse = false">Abbrechen</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AddCourse"
+                           Disabled="_selectedCourse is null">Hinzufügen</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudOverlay>
+}
+
+@if (_showBuyCard)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="10" OnClick="() => _showBuyCard = false">
+        <MudCard Class="pa-4" Style="min-width: 360px;" @onclick:stopPropagation="true">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-3">Karte kaufen</MudText>
+                <MudSelect T="CardType" @bind-Value="_newCardType" Label="Kartentyp"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+                    <MudSelectItem T="CardType" Value="CardType.FiveCard">5er-Karte</MudSelectItem>
+                    <MudSelectItem T="CardType" Value="CardType.TenCard">10er-Karte</MudSelectItem>
+                </MudSelect>
+                <MudNumericField @bind-Value="_newCardPrice" Label="Preis (€)" Format="0.00"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Min="0m" Class="mb-3" />
+                <MudDatePicker @bind-Date="_newCardDate" Label="Kaufdatum"
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               DateFormat="dd.MM.yyyy" Editable="true" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="() => _showBuyCard = false">Abbrechen</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="BuyCard">Kaufen</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudOverlay>
+}
+
+@if (_showUsageDialog && _usageCard is not null)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="10" OnClick="CloseUsageDialog">
+        <MudCard Class="pa-4" Style="min-width: 400px;" @onclick:stopPropagation="true">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-3">Besuch abbuchen</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3" Color="Color.Secondary">
+                    @(_usageCard.Type == CardType.FiveCard ? "5er-Karte" : "10er-Karte")
+                    · @_usageCard.RemainingVisits Besuche verbleibend
+                </MudText>
+                <MudAutocomplete T="Course" Label="Kurs" Value="_usageCourse"
+                                 SearchFunc="SearchRegularCourses" ToStringFunc="@(c => c is null ? "" : c.Name)"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3"
+                                 ShowProgressIndicator="true" ValueChanged="OnUsageCourseChanged" />
+                <MudSelect T="DateOnly?" @bind-Value="_usageDateOnly" Label="Kurstermin"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Disabled="_usageCourseDates.Count == 0">
+                    @foreach (var date in _usageCourseDates)
+                    {
+                        var d = date;
+                        <MudSelectItem T="DateOnly?" Value="d">@d.ToString("dddd, dd.MM.yyyy", _deCulture)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="CloseUsageDialog">Abbrechen</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AddUsage"
+                           Disabled="_usageCourse is null || !_usageDateOnly.HasValue">Abbuchen</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudOverlay>
+}
+
+@if (_showAddSharing && _sharingCard is not null)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="10" OnClick="() => _showAddSharing = false">
+        <MudCard Class="pa-4" Style="min-width: 400px;" @onclick:stopPropagation="true">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-3">Mitnutzer hinzufügen</MudText>
+                <MudAutocomplete T="Customer" Label="Kunde suchen" @bind-Value="_sharingCustomer"
+                                 SearchFunc="SearchCustomers" ToStringFunc="@(c => c is null ? "" : $"{c.LastName}, {c.FirstName}")"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 ShowProgressIndicator="true" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="() => _showAddSharing = false">Abbrechen</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AddSharing"
+                           Disabled="_sharingCustomer is null">Hinzufügen</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudOverlay>
+}
+
 @code {
     [Parameter, EditorRequired] public Customer Customer { get; set; } = default!;
     [Parameter] public EventCallback OnEdit { get; set; }
     [Parameter] public EventCallback OnDelete { get; set; }
 
     private bool _showDeleteConfirm;
+    private bool _showAddCourse;
+    private bool _showHistory;
+    private bool _showCardHistory;
+    private bool _showBuyCard;
+    private bool _showUsageDialog;
+    private List<CourseEnrollment>? _enrollments;
+    private List<CourseCard>? _cards;
+    private Course? _selectedCourse;
+    private DateTime? _enrollmentDate = DateTime.Today;
+
+    // Buy card state
+    private CardType _newCardType = CardType.TenCard;
+    private decimal? _newCardPrice;
+    private DateTime? _newCardDate = DateTime.Today;
+
+    // Sharing state
+    private bool _showAddSharing;
+    private CourseCard? _sharingCard;
+    private Customer? _sharingCustomer;
+
+    // Usage state
+    private CourseCard? _usageCard;
+    private Course? _usageCourse;
+    private DateOnly? _usageDateOnly;
+    private List<DateOnly> _usageCourseDates = [];
+    private static readonly System.Globalization.CultureInfo _deCulture = System.Globalization.CultureInfo.GetCultureInfo("de-DE");
 
     private bool HasAddress =>
         !string.IsNullOrWhiteSpace(Customer.Street) ||
         !string.IsNullOrWhiteSpace(Customer.ZipCode) ||
         !string.IsNullOrWhiteSpace(Customer.City);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadEnrollmentsAsync();
+        await LoadCardsAsync();
+    }
+
+    private async Task LoadEnrollmentsAsync()
+    {
+        if (Customer.Id != Guid.Empty)
+            _enrollments = await EnrollmentRepo.GetAllByCustomerAsync(Customer.Id);
+        else
+            _enrollments = [];
+    }
+
+    private async Task<IEnumerable<Course>> SearchCourses(string value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return await CourseRepo.GetAllAsync(ct);
+
+        return await CourseRepo.SearchAsync(value, ct);
+    }
+
+    private async Task AddCourse()
+    {
+        if (_selectedCourse is null || !_enrollmentDate.HasValue) return;
+
+        await EnrollmentRepo.AddAsync(new CourseEnrollment
+        {
+            CustomerId = Customer.Id,
+            CourseId = _selectedCourse.Id,
+            EnrolledAt = DateOnly.FromDateTime(_enrollmentDate.Value)
+        });
+
+        _showAddCourse = false;
+        _selectedCourse = null;
+        _enrollmentDate = DateTime.Today;
+        await LoadEnrollmentsAsync();
+    }
+
+    private async Task UnenrollFromCourse(CourseEnrollment enrollment)
+    {
+        await EnrollmentRepo.UnenrollAsync(enrollment.Id);
+        await LoadEnrollmentsAsync();
+    }
+
+    // Card methods
+    private async Task LoadCardsAsync()
+    {
+        if (Customer.Id != Guid.Empty)
+            _cards = await CardRepo.GetAllByCustomerAsync(Customer.Id);
+        else
+            _cards = [];
+    }
+
+    private async Task BuyCard()
+    {
+        if (!_newCardDate.HasValue) return;
+
+        var totalVisits = _newCardType == CardType.FiveCard ? 5 : 10;
+        var newCard = await CardRepo.AddAsync(new CourseCard
+        {
+            CustomerId = Customer.Id,
+            Type = _newCardType,
+            TotalVisits = totalVisits,
+            PricePaid = _newCardPrice ?? 0,
+            PurchasedAt = DateOnly.FromDateTime(_newCardDate.Value)
+        });
+
+        // Auto-book unbooked present entries from the new card
+        await BookUnpaidAttendancesAsync(newCard.Id);
+
+        _showBuyCard = false;
+        _newCardType = CardType.TenCard;
+        _newCardPrice = null;
+        _newCardDate = DateTime.Today;
+        await LoadCardsAsync();
+    }
+
+    private async Task BookUnpaidAttendancesAsync(Guid newCardId)
+    {
+        // Collect all customer IDs who can use this card: owner + all shared customers
+        var allCards = await CardRepo.GetAllByCustomerAsync(Customer.Id);
+        var relevantCustomerIds = new HashSet<Guid> { Customer.Id };
+        foreach (var card in allCards)
+        {
+            foreach (var share in card.SharedWith)
+                relevantCustomerIds.Add(share.CustomerId);
+        }
+
+        // Build set of already-booked (customerId, courseId, date) from all owner's cards
+        var bookedSet = new HashSet<(Guid customerId, Guid courseId, DateOnly date)>();
+        foreach (var card in allCards)
+        {
+            foreach (var usage in card.Usages)
+            {
+                if (usage.CourseId.HasValue)
+                {
+                    var usedBy = usage.UsedByCustomerId ?? card.CustomerId;
+                    bookedSet.Add((usedBy, usage.CourseId.Value, usage.UsedAt));
+                }
+            }
+        }
+
+        // Get all present records for owner + shared customers, find unbooked ones
+        var allUnbooked = new List<AttendanceRecord>();
+        foreach (var custId in relevantCustomerIds)
+        {
+            var presentRecords = await AttendanceRepo.GetPresentByCustomerAsync(custId);
+            var unbooked = presentRecords
+                .Where(r => !bookedSet.Contains((custId, r.CourseId, r.Date)));
+            allUnbooked.AddRange(unbooked);
+        }
+
+        allUnbooked = allUnbooked.OrderBy(r => r.Date).ToList();
+
+        // Book from the new card
+        var freshCards = await CardRepo.GetActiveByCustomerAsync(Customer.Id);
+        var targetCard = freshCards.FirstOrDefault(c => c.Id == newCardId);
+        if (targetCard is null) return;
+
+        foreach (var record in allUnbooked)
+        {
+            if (targetCard.RemainingVisits <= 0) break;
+
+            var isSharedUser = record.CustomerId != Customer.Id;
+            await CardRepo.AddUsageAsync(new CardUsage
+            {
+                CourseCardId = newCardId,
+                CourseId = record.CourseId,
+                UsedByCustomerId = isSharedUser ? record.CustomerId : null,
+                UsedAt = record.Date
+            });
+
+            targetCard.UsedVisits++;
+        }
+    }
+
+    private void StartUsage(CourseCard card)
+    {
+        _usageCard = card;
+        _usageCourse = null;
+        _usageDateOnly = null;
+        _usageCourseDates = [];
+        _showUsageDialog = true;
+    }
+
+    private void CloseUsageDialog()
+    {
+        _showUsageDialog = false;
+        _usageCard = null;
+    }
+
+    private void OnUsageCourseChanged(Course? course)
+    {
+        _usageCourse = course;
+        _usageDateOnly = null;
+        _usageCourseDates = [];
+
+        if (course?.DayOfWeek is null) return;
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        // Find this week's course date
+        var diff = ((int)course.DayOfWeek.Value - (int)today.DayOfWeek + 7) % 7;
+        var thisWeekDate = today.AddDays(diff);
+        // If course day already passed this week, thisWeekDate is next week — go back 7 days
+        if (diff > 0 && diff < 7)
+        {
+            // thisWeekDate is in the future this week, that's fine
+        }
+        else if (diff == 0)
+        {
+            // today IS the course day
+        }
+        else
+        {
+            thisWeekDate = thisWeekDate.AddDays(-7);
+        }
+
+        // Generate 3 past + current + 3 future = 7 dates
+        var dates = new List<DateOnly>();
+        for (var i = -3; i <= 3; i++)
+            dates.Add(thisWeekDate.AddDays(i * 7));
+
+        _usageCourseDates = dates;
+
+        // Pre-select: this week's date if today or future, otherwise next week
+        if (thisWeekDate >= today)
+            _usageDateOnly = thisWeekDate;
+        else
+            _usageDateOnly = thisWeekDate.AddDays(7);
+    }
+
+    private async Task AddUsage()
+    {
+        if (_usageCard is null || !_usageDateOnly.HasValue) return;
+
+        await CardRepo.AddUsageAsync(new CardUsage
+        {
+            CourseCardId = _usageCard.Id,
+            CourseId = _usageCourse?.Id,
+            UsedAt = _usageDateOnly.Value
+        });
+
+        _showUsageDialog = false;
+        _usageCard = null;
+        await LoadCardsAsync();
+    }
+
+    private async Task<IEnumerable<Course>> SearchRegularCourses(string value, CancellationToken ct)
+    {
+        // Only show courses the customer is actively enrolled in
+        var enrollments = _enrollments?.Where(e => e.UnenrolledAt == null).ToList() ?? [];
+        var enrolledCourses = enrollments
+            .Where(e => e.Course.Type == CourseType.Regular)
+            .Select(e => e.Course)
+            .ToList();
+
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            var term = value.ToLower();
+            enrolledCourses = enrolledCourses.Where(c => c.Name.ToLower().Contains(term)).ToList();
+        }
+
+        return enrolledCourses;
+    }
+
+    // Sharing methods
+    private void StartAddSharing(CourseCard card)
+    {
+        _sharingCard = card;
+        _sharingCustomer = null;
+        _showAddSharing = true;
+    }
+
+    private async Task AddSharing()
+    {
+        if (_sharingCard is null || _sharingCustomer is null) return;
+        await CardRepo.AddSharingAsync(_sharingCard.Id, _sharingCustomer.Id);
+        _showAddSharing = false;
+        _sharingCard = null;
+        _sharingCustomer = null;
+        await LoadCardsAsync();
+    }
+
+    private async Task RemoveSharing(Guid cardId, Guid customerId)
+    {
+        await CardRepo.RemoveSharingAsync(cardId, customerId);
+        await LoadCardsAsync();
+    }
+
+    private async Task<IEnumerable<Customer>> SearchCustomers(string value, CancellationToken ct)
+    {
+        var customers = string.IsNullOrWhiteSpace(value)
+            ? await CustomerRepo.GetAllAsync(ct)
+            : await CustomerRepo.SearchAsync(value, ct);
+        // Exclude the current customer
+        return customers.Where(c => c.Id != Customer.Id);
+    }
 
     private void ConfirmDelete() => _showDeleteConfirm = true;
 

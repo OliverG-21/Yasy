@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject IJSRuntime JS
 
 <MudThemeProvider @ref="_themeProvider" IsDarkMode="_isDarkMode"
                   IsDarkModeChanged="OnDarkModeChanged"
@@ -81,6 +82,15 @@
             }
         }
     };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isDarkMode = await JS.InvokeAsync<bool>("eval", "window.matchMedia('(prefers-color-scheme: dark)').matches");
+            StateHasChanged();
+        }
+    }
 
     private void OnDarkModeChanged(bool isDark)
     {

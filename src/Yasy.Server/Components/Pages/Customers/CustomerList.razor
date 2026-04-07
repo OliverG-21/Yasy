@@ -1,12 +1,14 @@
 @page "/kunden"
 @using Yasy.Core.Entities
 @using Yasy.Core.Interfaces
+@using Microsoft.AspNetCore.WebUtilities
 @inject ICustomerRepository CustomerRepo
 @inject IProfileImageService ImageService
+@inject NavigationManager Nav
 
 <PageTitle>Yasy - Kunden</PageTitle>
 
-<div class="customer-master-detail">
+<div class="customer-master-detail @(_selectedCustomer is not null || _isEditing ? "detail-active" : "")">
     @* Left Panel: Customer List *@
     <div class="customer-list-panel">
         <div class="customer-list-header">
@@ -31,34 +33,28 @@
             }
             else
             {
-                string? currentLetter = null;
-                @foreach (var customer in _customers)
+                @foreach (var group in _customers.GroupBy(c => c.LastName.Length > 0 ? c.LastName[..1].ToUpper() : "#"))
                 {
-                    var firstLetter = customer.LastName.Length > 0
-                        ? customer.LastName[..1].ToUpper()
-                        : "#";
+                    <div class="letter-divider">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@group.Key</MudText>
+                    </div>
 
-                    @if (firstLetter != currentLetter)
+                    @foreach (var customer in group)
                     {
-                        currentLetter = firstLetter;
-                        <div class="letter-divider">
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@currentLetter</MudText>
+                        <div class="customer-list-item @(customer.Id == _selectedId ? "selected" : "")"
+                             @onclick="() => SelectCustomer(customer)">
+                            <div class="customer-avatar">
+                                <CustomerAvatar Customer="customer" Size="Size.Medium" />
+                            </div>
+                            <div class="customer-list-info">
+                                <MudText Typo="Typo.body1"><strong>@customer.LastName</strong>, @customer.FirstName</MudText>
+                                @if (!string.IsNullOrWhiteSpace(customer.City))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@customer.City</MudText>
+                                }
+                            </div>
                         </div>
                     }
-
-                    <div class="customer-list-item @(customer.Id == _selectedId ? "selected" : "")"
-                         @onclick="() => SelectCustomer(customer)">
-                        <div class="customer-avatar">
-                            <CustomerAvatar Customer="customer" Size="Size.Medium" />
-                        </div>
-                        <div class="customer-list-info">
-                            <MudText Typo="Typo.body1"><strong>@customer.LastName</strong>, @customer.FirstName</MudText>
-                            @if (!string.IsNullOrWhiteSpace(customer.City))
-                            {
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@customer.City</MudText>
-                            }
-                        </div>
-                    </div>
                 }
             }
         </div>
@@ -66,6 +62,13 @@
 
     @* Right Panel: Detail / Edit *@
     <div class="customer-detail-panel">
+        @if (_isEditing || _selectedCustomer is not null)
+        {
+            <div class="mobile-back-bar">
+                <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Variant="Variant.Text" Size="Size.Small"
+                           OnClick="GoBackToList">Zurück</MudButton>
+            </div>
+        }
         @if (_isEditing)
         {
             <CustomerEdit Customer="_editCustomer" OnSave="OnSaveCustomer" OnCancel="OnCancelEdit" />
@@ -95,6 +98,16 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadCustomersAsync();
+
+        // Auto-select customer from query parameter
+        var uri = new Uri(Nav.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("id", out var idValue)
+            && Guid.TryParse(idValue, out var customerId))
+        {
+            var customer = _customers?.FirstOrDefault(c => c.Id == customerId);
+            if (customer is not null)
+                SelectCustomer(customer);
+        }
     }
 
     private async Task LoadCustomersAsync()
@@ -193,5 +206,12 @@
         {
             _selectedCustomer = null;
         }
+    }
+
+    private void GoBackToList()
+    {
+        _selectedCustomer = null;
+        _selectedId = null;
+        _isEditing = false;
     }
 }

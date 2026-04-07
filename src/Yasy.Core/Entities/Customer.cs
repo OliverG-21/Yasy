@@ -15,4 +15,7 @@ public class Customer
     public string? ProfileImagePath { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+
+    public List<CourseEnrollment> Enrollments { get; set; } = [];
+    public List<CourseCard> Cards { get; set; } = [];
 }

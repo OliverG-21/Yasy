@@ -1,0 +1,249 @@
+@page "/kurse"
+@using Yasy.Core.Entities
+@using Yasy.Core.Interfaces
+@using Yasy.Shared.Enums
+@inject ICourseRepository CourseRepo
+
+<PageTitle>Yasy - Kurse</PageTitle>
+
+<div class="course-master-detail @(_selectedCourse is not null || _isEditing ? "detail-active" : "")">
+    @* Left Panel: Course List *@
+    <div class="course-list-panel">
+        <div class="course-list-header">
+            <MudTextField @bind-Value="_searchTerm" Placeholder="Suchen…" Variant="Variant.Outlined"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" DebounceInterval="300" OnDebounceIntervalElapsed="OnSearchChanged"
+                          Margin="Margin.Dense" Class="search-field" />
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary"
+                           OnClick="StartNewCourse" aria-label="Neuer Kurs" />
+        </div>
+
+        <MudTabs @bind-ActivePanelIndex="_activeTab" Rounded="false" ApplyEffectsToContainer="true"
+                 Class="course-tabs">
+            <MudTabPanel Text="Kurse" />
+            <MudTabPanel Text="Workshops" />
+        </MudTabs>
+
+        <div class="course-list-items">
+            @if (_courses is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else
+            {
+                var filtered = FilteredCourses;
+                if (filtered.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="pa-4" Align="Align.Center" Color="Color.Secondary">
+                        @(_searchTerm?.Length > 0 ? "Keine Treffer" : (_activeTab == 0 ? "Noch keine Kurse vorhanden" : "Noch keine Workshops vorhanden"))
+                    </MudText>
+                }
+                else
+                {
+                    @foreach (var course in filtered)
+                    {
+                        <div class="course-list-item @(course.Id == _selectedId ? "selected" : "")"
+                             @onclick="() => SelectCourse(course)">
+                            <MudIcon Icon="@GetCourseIcon(course)" Size="Size.Small" Class="course-list-icon" />
+                            <div class="course-list-info">
+                                <MudText Typo="Typo.body1"><strong>@course.Name</strong></MudText>
+                                @if (course.Type == CourseType.Workshop)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @if (course.Date.HasValue) { @course.Date.Value.ToString("dd.MM.yyyy") }
+                                        @if (course.StartTime.HasValue && course.EndTime.HasValue) { @($" · {course.StartTime.Value:HH:mm}–{course.EndTime.Value:HH:mm}") }
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @if (course.DayOfWeek.HasValue) { @DayNames[(int)course.DayOfWeek.Value] }
+                                        @if (course.StartTime.HasValue) { @($" · {course.StartTime.Value:HH:mm} Uhr") }
+                                        @if (course.DurationMinutes.HasValue) { @($" · {course.DurationMinutes} Min.") }
+                                    </MudText>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            }
+        </div>
+    </div>
+
+    @* Right Panel: Detail / Edit *@
+    <div class="course-detail-panel">
+        @if (_isEditing || _selectedCourse is not null)
+        {
+            <div class="mobile-back-bar">
+                <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Variant="Variant.Text" Size="Size.Small"
+                           OnClick="GoBackToList">Zurück</MudButton>
+            </div>
+        }
+        @if (_isEditing)
+        {
+            <CourseEdit Course="_editCourse" OnSave="OnSaveCourse" OnCancel="OnCancelEdit" />
+        }
+        else if (_selectedCourse is not null)
+        {
+            <CourseDetail Course="_selectedCourse" OnEdit="StartEditCourse" OnDelete="OnDeleteCourse" />
+        }
+        else
+        {
+            <div class="course-detail-empty">
+                <MudIcon Icon="@Icons.Material.Filled.School" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-2">Kurs auswählen</MudText>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Course>? _courses;
+    private Course? _selectedCourse;
+    private Course _editCourse = new();
+    private Guid? _selectedId;
+    private string? _searchTerm;
+    private bool _isEditing;
+    private int _activeTab;
+
+    private static readonly string[] DayNames = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+
+    private List<Course> FilteredCourses
+    {
+        get
+        {
+            if (_courses is null) return [];
+            var type = _activeTab == 0 ? CourseType.Regular : CourseType.Workshop;
+            return _courses.Where(c => c.Type == type).ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCoursesAsync();
+    }
+
+    private async Task LoadCoursesAsync()
+    {
+        _courses = string.IsNullOrWhiteSpace(_searchTerm)
+            ? await CourseRepo.GetAllAsync()
+            : await CourseRepo.SearchAsync(_searchTerm);
+    }
+
+    private async Task OnSearchChanged(string _)
+    {
+        await LoadCoursesAsync();
+        if (_selectedId.HasValue && _courses?.All(c => c.Id != _selectedId) == true)
+        {
+            _selectedCourse = null;
+            _selectedId = null;
+            _isEditing = false;
+        }
+    }
+
+    private void SelectCourse(Course course)
+    {
+        _selectedCourse = course;
+        _selectedId = course.Id;
+        _isEditing = false;
+    }
+
+    private void StartNewCourse()
+    {
+        _editCourse = new Course
+        {
+            Type = _activeTab == 0 ? CourseType.Regular : CourseType.Workshop
+        };
+        _selectedCourse = null;
+        _selectedId = null;
+        _isEditing = true;
+    }
+
+    private void StartEditCourse()
+    {
+        if (_selectedCourse is null) return;
+        _editCourse = new Course
+        {
+            Id = _selectedCourse.Id,
+            Name = _selectedCourse.Name,
+            Type = _selectedCourse.Type,
+            Date = _selectedCourse.Date,
+            StartTime = _selectedCourse.StartTime,
+            EndTime = _selectedCourse.EndTime,
+            Price = _selectedCourse.Price,
+            DayOfWeek = _selectedCourse.DayOfWeek,
+            DurationMinutes = _selectedCourse.DurationMinutes,
+            DropInPrice = _selectedCourse.DropInPrice,
+            FiveCardPrice = _selectedCourse.FiveCardPrice,
+            TenCardPrice = _selectedCourse.TenCardPrice,
+            CreatedAt = _selectedCourse.CreatedAt
+        };
+        _isEditing = true;
+    }
+
+    private async Task OnSaveCourse(Course course)
+    {
+        if (course.Id == Guid.Empty)
+        {
+            var created = await CourseRepo.AddAsync(course);
+            _selectedId = created.Id;
+        }
+        else
+        {
+            await CourseRepo.UpdateAsync(course);
+            _selectedId = course.Id;
+        }
+
+        await LoadCoursesAsync();
+        _selectedCourse = _courses?.FirstOrDefault(c => c.Id == _selectedId);
+        _isEditing = false;
+
+        // Switch tab to match saved course type
+        _activeTab = course.Type == CourseType.Workshop ? 1 : 0;
+    }
+
+    private async Task OnDeleteCourse()
+    {
+        if (_selectedCourse is null) return;
+        await CourseRepo.DeleteAsync(_selectedCourse.Id);
+        _selectedCourse = null;
+        _selectedId = null;
+        _isEditing = false;
+        await LoadCoursesAsync();
+    }
+
+    private void OnCancelEdit()
+    {
+        _isEditing = false;
+        if (_selectedId == null || _selectedId == Guid.Empty)
+        {
+            _selectedCourse = null;
+        }
+    }
+
+    private void GoBackToList()
+    {
+        _selectedCourse = null;
+        _selectedId = null;
+        _isEditing = false;
+    }
+
+    private static string GetCourseIcon(Course course) =>
+        course.Type == CourseType.Workshop
+            ? Icons.Material.Filled.Event
+            : Icons.Material.Filled.Loop;
+
+    private string GetCourseSubtitle(Course course)
+    {
+        if (course.Type == CourseType.Workshop)
+        {
+            return course.Date.HasValue
+                ? $"{course.Date.Value:dd.MM.yyyy} · {course.Price:0.00} €"
+                : "Kein Datum";
+        }
+
+        var day = course.DayOfWeek.HasValue ? DayNames[(int)course.DayOfWeek.Value] : "–";
+        var time = course.StartTime.HasValue ? course.StartTime.Value.ToString("HH:mm") : "";
+        return $"{day} {time}".Trim();
+    }
+}

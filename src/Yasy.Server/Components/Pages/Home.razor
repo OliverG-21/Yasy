@@ -1,8 +1,14 @@
 @page "/"
 @using Yasy.Core.Entities
 @using Yasy.Core.Interfaces
+@using Yasy.Shared.Enums
 @using Yasy.Server.Components.Pages.Customers
 @inject ICustomerRepository CustomerRepo
+@inject ICourseCardRepository CardRepo
+@inject ICourseRepository CourseRepo
+@inject ICourseEnrollmentRepository EnrollmentRepo
+@inject IAttendanceRepository AttendanceRepo
+@inject NavigationManager Nav
 
 <PageTitle>Yasy - Dashboard</PageTitle>
 
@@ -42,7 +48,7 @@
                             var daysUntil = thisYear.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber;
                             var turnsAge = thisYear.Year - bday.Year;
 
-                            <MudListItem T="Customer">
+                            <MudListItem T="Customer" OnClick="() => GoToCustomer(customer.Id)">
                                 <div class="d-flex align-center gap-3">
                                     <CustomerAvatar Customer="customer" Size="Size.Small" />
                                     <div class="flex-grow-1">
@@ -63,13 +69,183 @@
             </MudCardContent>
         </MudCard>
     </MudItem>
+
+    <MudItem xs="12" md="6" lg="4">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">
+                        <MudIcon Icon="@Icons.Material.Filled.CreditCardOff" Class="mr-2" Size="Size.Small" />
+                        Guthaben fast aufgebraucht
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent Class="pa-0">
+                @if (_lowBalanceCards is null)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_lowBalanceCards.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="pa-4" Align="Align.Center" Color="Color.Secondary">
+                        Keine Kunden mit niedrigem Guthaben
+                    </MudText>
+                }
+                else
+                {
+                    <MudList T="CourseCard" Dense="true">
+                        @foreach (var card in _lowBalanceCards)
+                        {
+                            <MudListItem T="CourseCard" OnClick="() => GoToCustomer(card.Customer.Id)">
+                                <div class="d-flex align-center gap-3">
+                                    <CustomerAvatar Customer="card.Customer" Size="Size.Small" />
+                                    <div class="flex-grow-1">
+                                        <MudText Typo="Typo.body1">@card.Customer.FirstName @card.Customer.LastName</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @(card.Type == CardType.FiveCard ? "5er-Karte" : "10er-Karte")
+                                            · gekauft am @card.PurchasedAt.ToString("dd.MM.yyyy")
+                                        </MudText>
+                                    </div>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(card.RemainingVisits <= 1 ? Color.Error : Color.Warning)">
+                                        @card.RemainingVisits @(card.RemainingVisits == 1 ? "Besuch" : "Besuche")
+                                    </MudChip>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" md="6" lg="4">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">
+                        <MudIcon Icon="@Icons.Material.Filled.EventNote" Class="mr-2" Size="Size.Small" />
+                        Kurse diese Woche
+                    </MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent Class="pa-0">
+                @if (_weekCourses is null)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_weekCourses.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="pa-4" Align="Align.Center" Color="Color.Secondary">
+                        Keine Kurse diese Woche
+                    </MudText>
+                }
+                else
+                {
+                    <MudList T="(Course course, DateOnly date)" Dense="true" Clickable="true">
+                        @foreach (var item in _weekCourses)
+                        {
+                            var c = item;
+                            var isToday = c.date == DateOnly.FromDateTime(DateTime.Today);
+                            var isPast = c.date < DateOnly.FromDateTime(DateTime.Today);
+                            var isCancelled = _weekCancelled.Contains((c.course.Id, c.date));
+                            var stats = _weekStats.GetValueOrDefault(c.course.Id);
+
+                            <MudListItem T="(Course, DateOnly)" OnClick="() => GoToAttendance(c.course.Id)">
+                                <div class="d-flex align-center gap-3" style="@(isCancelled ? "opacity:0.4; text-decoration:line-through;" : "")">
+                                    <MudIcon Icon="@Icons.Material.Filled.Loop" Size="Size.Small"
+                                             Color="@(isToday ? Color.Primary : Color.Default)" />
+                                    <div class="flex-grow-1">
+                                        <MudText Typo="Typo.body1" Color="@(isToday ? Color.Primary : Color.Default)">
+                                            @c.course.Name
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @DayNames[(int)c.date.DayOfWeek], @c.date.ToString("dd.MM.")
+                                            @if (c.course.StartTime.HasValue)
+                                            {
+                                                @($" · {c.course.StartTime.Value:HH:mm} Uhr")
+                                            }
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @stats.enrolled Teilnehmer
+                                            @if (stats.absences > 0)
+                                            {
+                                                <span style="color: var(--mud-palette-error);"> · @stats.absences Absage@(stats.absences > 1 ? "n" : "")</span>
+                                            }
+                                        </MudText>
+                                    </div>
+                                    @if (isCancelled)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Error"><strong>Abgesagt</strong></MudText>
+                                    }
+                                    else if (isToday)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Primary"><strong>Heute</strong></MudText>
+                                    }
+                                    else if (isPast)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" />
+                                    }
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
 </MudGrid>
 
 @code {
     private List<Customer>? _birthdayCustomers;
+    private List<CourseCard>? _lowBalanceCards;
+    private List<(Course course, DateOnly date)>? _weekCourses;
+    private HashSet<(Guid CourseId, DateOnly Date)> _weekCancelled = [];
+    private Dictionary<Guid, (int enrolled, int absences)> _weekStats = new();
+
+    private static readonly string[] DayNames = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 
     protected override async Task OnInitializedAsync()
     {
         _birthdayCustomers = await CustomerRepo.GetUpcomingBirthdaysAsync();
+        _lowBalanceCards = await CardRepo.GetLowBalanceCardsAsync();
+        await LoadWeekCoursesAsync();
+    }
+
+    private void GoToAttendance(Guid courseId) => Nav.NavigateTo($"/kurse/{courseId}/anmeldeliste");
+    private void GoToCustomer(Guid customerId) => Nav.NavigateTo($"/kunden?id={customerId}");
+
+    private async Task LoadWeekCoursesAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var diff = ((int)today.DayOfWeek + 6) % 7;
+        var monday = today.AddDays(-diff);
+        var sunday = monday.AddDays(6);
+
+        var courses = await CourseRepo.GetAllAsync();
+        _weekCancelled = await CourseRepo.GetCancellationsAsync(monday, sunday);
+
+        var items = new List<(Course course, DateOnly date)>();
+        foreach (var course in courses.Where(c => c.Type == CourseType.Regular && c.DayOfWeek.HasValue))
+        {
+            var courseDay = monday;
+            while (courseDay.DayOfWeek != course.DayOfWeek!.Value && courseDay <= sunday)
+                courseDay = courseDay.AddDays(1);
+
+            if (courseDay <= sunday)
+                items.Add((course, courseDay));
+        }
+
+        _weekCourses = items.OrderBy(i => i.date).ThenBy(i => i.course.StartTime).ToList();
+
+        // Load enrollment counts and absences per course
+        _weekStats.Clear();
+        foreach (var (course, date) in _weekCourses)
+        {
+            var enrollments = await EnrollmentRepo.GetActiveByCourseAsync(course.Id);
+            var records = await AttendanceRepo.GetByCourseAndRangeAsync(course.Id, date, date);
+            var absences = records.Count(r => r.Status == AttendanceStatus.Absent);
+            _weekStats[course.Id] = (enrollments.Count, absences);
+        }
     }
 }

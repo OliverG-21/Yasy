@@ -1,0 +1,224 @@
+@using Yasy.Core.Entities
+@using Yasy.Core.Interfaces
+@using Yasy.Shared.Enums
+@inject ICourseEnrollmentRepository EnrollmentRepo
+@inject ICustomerRepository CustomerRepo
+@inject NavigationManager Nav
+
+<div class="course-detail-content">
+    <div class="course-detail-header">
+        <MudIcon Icon="@(Course.Type == CourseType.Workshop ? Icons.Material.Filled.Event : Icons.Material.Filled.Loop)"
+                 Size="Size.Large" Color="Color.Primary" Class="mb-2" />
+        <MudText Typo="Typo.h4">@Course.Name</MudText>
+        <MudChip T="string" Color="@(Course.Type == CourseType.Workshop ? Color.Warning : Color.Info)"
+                 Size="Size.Small" Class="mt-2">
+            @(Course.Type == CourseType.Workshop ? "Workshop" : "Kurs")
+        </MudChip>
+    </div>
+
+    <MudDivider Class="my-4" />
+
+    <div class="course-detail-fields">
+        @if (Course.Type == CourseType.Workshop)
+        {
+            <DetailField Icon="@Icons.Material.Filled.Event" Label="Termin"
+                         Value="@($"{(Course.Date.HasValue ? Course.Date.Value.ToString("dd.MM.yyyy") : "–")} · {(Course.StartTime.HasValue && Course.EndTime.HasValue ? $"{Course.StartTime.Value:HH:mm}–{Course.EndTime.Value:HH:mm} Uhr" : "–")} · {(Course.Price.HasValue ? $"{Course.Price.Value:0.00} €" : "–")}")" />
+        }
+        else
+        {
+            <DetailField Icon="@Icons.Material.Filled.Schedule" Label="Termin"
+                         Value="@($"{(Course.DayOfWeek.HasValue ? DayNames[(int)Course.DayOfWeek.Value] : "–")} · {(Course.StartTime.HasValue ? $"{Course.StartTime.Value:HH:mm} Uhr" : "–")} · {(Course.DurationMinutes.HasValue ? $"{Course.DurationMinutes} Min." : "–")}")" />
+            <DetailField Icon="@Icons.Material.Filled.Euro" Label="Preise"
+                         Value="@($"DropIn {(Course.DropInPrice.HasValue ? $"{Course.DropInPrice.Value:0.00} €" : "–")} · 5er {(Course.FiveCardPrice.HasValue ? $"{Course.FiveCardPrice.Value:0.00} €" : "–")} · 10er {(Course.TenCardPrice.HasValue ? $"{Course.TenCardPrice.Value:0.00} €" : "–")}")" />
+        }
+    </div>
+
+    <MudDivider Class="my-4" />
+
+    @* Teilnehmer *@
+    <div class="d-flex align-center justify-space-between mb-2">
+        <MudText Typo="Typo.subtitle1"><strong>Teilnehmer</strong></MudText>
+        <div class="d-flex align-center gap-1">
+            <MudToggleIconButton @bind-Toggled="_showHistory"
+                                 Icon="@Icons.Material.Filled.History" ToggledIcon="@Icons.Material.Filled.History"
+                                 Size="Size.Small" Color="Color.Default" ToggledColor="Color.Primary"
+                                 Title="Historie anzeigen" />
+            <MudIconButton Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" Size="Size.Small"
+                           OnClick="() => _showAddParticipant = true" />
+        </div>
+    </div>
+
+    @if (_enrollments is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        var visible = _showHistory ? _enrollments : _enrollments.Where(e => e.UnenrolledAt == null).ToList();
+        if (visible.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                @(_showHistory ? "Keine Anmeldungen in der Historie" : "Keine Teilnehmer angemeldet")
+            </MudText>
+        }
+        else
+        {
+            <MudList T="CourseEnrollment" Dense="true" Class="mb-4">
+                @foreach (var enrollment in visible)
+                {
+                    var e = enrollment;
+                    <MudListItem T="CourseEnrollment" Icon="@Icons.Material.Filled.Person">
+                        <div class="d-flex align-center justify-space-between" style="width:100%;">
+                            <div style="@(e.UnenrolledAt.HasValue ? "opacity: 0.5;" : "")">
+                                <MudText Typo="Typo.body2">@e.Customer.LastName, @e.Customer.FirstName</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Angemeldet am @e.EnrolledAt.ToString("dd.MM.yyyy")
+                                    @if (e.UnenrolledAt.HasValue)
+                                    {
+                                        <span> · Abgemeldet am @e.UnenrolledAt.Value.ToString("dd.MM.yyyy")</span>
+                                    }
+                                </MudText>
+                            </div>
+                            @if (!e.UnenrolledAt.HasValue)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Color="Color.Error" Size="Size.Small"
+                                               OnClick="() => UnenrollParticipant(e)" Title="Abmelden" />
+                            }
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    }
+
+    <MudDivider Class="my-4" />
+
+    <div class="course-detail-actions">
+        @if (Course.Type == CourseType.Regular)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Tertiary" StartIcon="@Icons.Material.Filled.FactCheck"
+                       OnClick="OpenAttendanceSheet">
+                Anmeldeliste
+            </MudButton>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit"
+                   OnClick="OnEdit">
+            Bearbeiten
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                   OnClick="ConfirmDelete">
+            Löschen
+        </MudButton>
+    </div>
+</div>
+
+@if (_showDeleteConfirm)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="10" OnClick="() => _showDeleteConfirm = false">
+        <MudCard Class="pa-4" Style="min-width: 320px;" @onclick:stopPropagation="true">
+            <MudCardContent>
+                <MudText Typo="Typo.h6">@(Course.Type == CourseType.Workshop ? "Workshop" : "Kurs") löschen?</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">
+                    <strong>@Course.Name</strong> wird unwiderruflich gelöscht.
+                </MudText>
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="() => _showDeleteConfirm = false">Abbrechen</MudButton>
+                <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="OnDeleteConfirmed">Löschen</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudOverlay>
+}
+
+@if (_showAddParticipant)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="10" OnClick="() => _showAddParticipant = false">
+        <MudCard Class="pa-4" Style="min-width: 400px;" @onclick:stopPropagation="true">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-3">Teilnehmer hinzufügen</MudText>
+                <MudAutocomplete T="Customer" Label="Kunde suchen" @bind-Value="_selectedCustomer"
+                                 SearchFunc="SearchCustomers" ToStringFunc="@(c => c is null ? "" : $"{c.LastName}, {c.FirstName}")"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3"
+                                 ShowProgressIndicator="true" />
+                <MudDatePicker @bind-Date="_enrollmentDate" Label="Anmeldedatum"
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               DateFormat="dd.MM.yyyy" Editable="true" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton OnClick="() => _showAddParticipant = false">Abbrechen</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AddParticipant"
+                           Disabled="_selectedCustomer is null">Hinzufügen</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudOverlay>
+}
+
+@code {
+    [Parameter, EditorRequired] public Course Course { get; set; } = default!;
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    private bool _showDeleteConfirm;
+    private bool _showAddParticipant;
+    private bool _showHistory;
+    private List<CourseEnrollment>? _enrollments;
+    private Customer? _selectedCustomer;
+    private DateTime? _enrollmentDate = DateTime.Today;
+    private static readonly string[] DayNames = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadEnrollmentsAsync();
+    }
+
+    private async Task LoadEnrollmentsAsync()
+    {
+        if (Course.Id != Guid.Empty)
+            _enrollments = await EnrollmentRepo.GetAllByCourseAsync(Course.Id);
+        else
+            _enrollments = [];
+    }
+
+    private async Task<IEnumerable<Customer>> SearchCustomers(string value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return await CustomerRepo.GetAllAsync(ct);
+
+        return await CustomerRepo.SearchAsync(value, ct);
+    }
+
+    private async Task AddParticipant()
+    {
+        if (_selectedCustomer is null || !_enrollmentDate.HasValue) return;
+
+        await EnrollmentRepo.AddAsync(new CourseEnrollment
+        {
+            CustomerId = _selectedCustomer.Id,
+            CourseId = Course.Id,
+            EnrolledAt = DateOnly.FromDateTime(_enrollmentDate.Value)
+        });
+
+        _showAddParticipant = false;
+        _selectedCustomer = null;
+        _enrollmentDate = DateTime.Today;
+        await LoadEnrollmentsAsync();
+    }
+
+    private async Task UnenrollParticipant(CourseEnrollment enrollment)
+    {
+        await EnrollmentRepo.UnenrollAsync(enrollment.Id);
+        await LoadEnrollmentsAsync();
+    }
+
+    private void OpenAttendanceSheet() => Nav.NavigateTo($"/kurse/{Course.Id}/anmeldeliste");
+
+    private void ConfirmDelete() => _showDeleteConfirm = true;
+
+    private async Task OnDeleteConfirmed()
+    {
+        _showDeleteConfirm = false;
+        await OnDelete.InvokeAsync();
+    }
+}

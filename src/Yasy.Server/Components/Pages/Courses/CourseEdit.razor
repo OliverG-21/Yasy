@@ -1,0 +1,158 @@
+@using Yasy.Core.Entities
+@using Yasy.Shared.Enums
+
+<div class="course-detail-content">
+    <div class="course-detail-header">
+        <MudIcon Icon="@(Course.Type == CourseType.Workshop ? Icons.Material.Filled.Event : Icons.Material.Filled.Loop)"
+                 Size="Size.Large" Color="Color.Primary" Class="mb-2" />
+        <MudText Typo="Typo.h5">
+            @(Course.Id == Guid.Empty ? (Course.Type == CourseType.Workshop ? "Neuer Workshop" : "Neuer Kurs") : (Course.Type == CourseType.Workshop ? "Workshop bearbeiten" : "Kurs bearbeiten"))
+        </MudText>
+    </div>
+
+    <MudDivider Class="my-4" />
+
+    <MudForm @ref="_form">
+        <div class="course-edit-fields">
+            <MudSelect T="CourseType" @bind-Value="Course.Type" Label="Typ" Variant="Variant.Outlined"
+                       Margin="Margin.Dense">
+                <MudSelectItem T="CourseType" Value="CourseType.Regular">Kurs</MudSelectItem>
+                <MudSelectItem T="CourseType" Value="CourseType.Workshop">Workshop</MudSelectItem>
+            </MudSelect>
+
+            <MudTextField @bind-Value="Course.Name" Label="Bezeichnung" Required="true"
+                          RequiredError="Bezeichnung ist erforderlich"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+
+            <MudDivider Class="my-3" />
+
+            @if (Course.Type == CourseType.Workshop)
+            {
+                <MudDatePicker @bind-Date="_workshopDate" Label="Datum"
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               DateFormat="dd.MM.yyyy" Placeholder="TT.MM.JJJJ" Editable="true" />
+
+                <div class="time-row">
+                    <MudTimePicker @bind-Time="_startTime" Label="Startzeit"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true"
+                                   AmPm="false" />
+                    <MudTimePicker @bind-Time="_endTime" Label="Endzeit"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true"
+                                   AmPm="false" />
+                </div>
+
+                <MudNumericField @bind-Value="Course.Price" Label="Preis (€)" Format="0.00"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Min="0m" />
+            }
+            else
+            {
+                <MudSelect T="DayOfWeek?" @bind-Value="Course.DayOfWeek" Label="Wochentag"
+                           Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="DayOfWeek?" Value="System.DayOfWeek.Monday">Montag</MudSelectItem>
+                    <MudSelectItem T="DayOfWeek?" Value="System.DayOfWeek.Tuesday">Dienstag</MudSelectItem>
+                    <MudSelectItem T="DayOfWeek?" Value="System.DayOfWeek.Wednesday">Mittwoch</MudSelectItem>
+                    <MudSelectItem T="DayOfWeek?" Value="System.DayOfWeek.Thursday">Donnerstag</MudSelectItem>
+                    <MudSelectItem T="DayOfWeek?" Value="System.DayOfWeek.Friday">Freitag</MudSelectItem>
+                    <MudSelectItem T="DayOfWeek?" Value="System.DayOfWeek.Saturday">Samstag</MudSelectItem>
+                    <MudSelectItem T="DayOfWeek?" Value="System.DayOfWeek.Sunday">Sonntag</MudSelectItem>
+                </MudSelect>
+
+                <div class="time-row">
+                    <MudTimePicker @bind-Time="_startTime" Label="Uhrzeit"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Editable="true"
+                                   AmPm="false" />
+                    <MudNumericField @bind-Value="Course.DurationMinutes" Label="Dauer (Min.)"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+                </div>
+
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Preise</MudText>
+
+                <MudNumericField @bind-Value="Course.DropInPrice" Label="DropIn (€)" Format="0.00"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Min="0m" />
+
+                <div class="price-row">
+                    <MudNumericField @bind-Value="Course.FiveCardPrice" Label="5er-Karte (€)" Format="0.00"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Min="0m" />
+                    <MudNumericField @bind-Value="Course.TenCardPrice" Label="10er-Karte (€)" Format="0.00"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Min="0m" />
+                </div>
+            }
+        </div>
+    </MudForm>
+
+    <MudDivider Class="my-4" />
+
+    <div class="course-detail-actions">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Save" OnClick="HandleSave">
+            Speichern
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="HandleCancel">
+            Abbrechen
+        </MudButton>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Course Course { get; set; } = default!;
+    [Parameter] public EventCallback<Course> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private MudForm _form = default!;
+    private DateTime? _workshopDate;
+    private TimeSpan? _startTime;
+    private TimeSpan? _endTime;
+
+    protected override void OnParametersSet()
+    {
+        _workshopDate = Course.Date?.ToDateTime(TimeOnly.MinValue);
+        _startTime = Course.StartTime.HasValue
+            ? new TimeSpan(Course.StartTime.Value.Hour, Course.StartTime.Value.Minute, 0)
+            : null;
+        _endTime = Course.EndTime.HasValue
+            ? new TimeSpan(Course.EndTime.Value.Hour, Course.EndTime.Value.Minute, 0)
+            : null;
+    }
+
+    private async Task HandleSave()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        Course.StartTime = _startTime.HasValue
+            ? new TimeOnly(_startTime.Value.Hours, _startTime.Value.Minutes)
+            : null;
+
+        if (Course.Type == CourseType.Workshop)
+        {
+            Course.Date = _workshopDate.HasValue
+                ? DateOnly.FromDateTime(_workshopDate.Value)
+                : null;
+            Course.EndTime = _endTime.HasValue
+                ? new TimeOnly(_endTime.Value.Hours, _endTime.Value.Minutes)
+                : null;
+
+            // Clear regular course fields
+            Course.DayOfWeek = null;
+            Course.DurationMinutes = null;
+            Course.DropInPrice = null;
+            Course.FiveCardPrice = null;
+            Course.TenCardPrice = null;
+        }
+        else
+        {
+            // Clear workshop fields
+            Course.Date = null;
+            Course.EndTime = null;
+            Course.Price = null;
+        }
+
+        await OnSave.InvokeAsync(Course);
+    }
+
+    private async Task HandleCancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+}

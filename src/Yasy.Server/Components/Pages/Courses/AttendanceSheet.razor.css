@@ -1,0 +1,131 @@
+.attendance-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 100px);
+    overflow: hidden;
+}
+
+.attendance-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    flex-shrink: 0;
+    gap: 16px;
+}
+
+.attendance-title {
+    flex: 1;
+    text-align: center;
+}
+
+.attendance-quarter-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.attendance-table-wrapper {
+    flex: 1;
+    overflow: auto;
+}
+
+.attendance-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.attendance-table th,
+.attendance-table td {
+    border: 1px solid var(--mud-palette-lines-default);
+    padding: 6px 8px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.attendance-table th {
+    background: var(--mud-palette-surface);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    font-weight: 600;
+}
+
+.col-name {
+    text-align: left !important;
+    min-width: 160px;
+    position: sticky;
+    left: 0;
+    z-index: 3 !important;
+    background: var(--mud-palette-surface) !important;
+}
+
+.col-balance {
+    min-width: 80px;
+    position: sticky;
+    left: 160px;
+    z-index: 3 !important;
+    background: var(--mud-palette-surface) !important;
+}
+
+tbody .col-name,
+tbody .col-balance {
+    background: var(--mud-palette-background) !important;
+}
+
+.col-date {
+    min-width: 50px;
+    height: 40px;
+    cursor: pointer;
+    user-select: none;
+    vertical-align: middle;
+}
+
+.col-date:hover {
+    background: var(--mud-palette-action-default-hover);
+}
+
+.cancelled-col {
+    background: var(--mud-palette-background-gray) !important;
+    cursor: not-allowed !important;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.today-col {
+    background: color-mix(in srgb, var(--mud-palette-primary) 10%, transparent) !important;
+    font-weight: 700;
+}
+
+.status-icon {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.status-icon.present {
+    color: var(--mud-palette-success);
+}
+
+.status-icon.absent {
+    color: var(--mud-palette-error);
+}
+
+.status-icon.no-credit {
+    color: var(--mud-palette-error);
+    font-weight: 900;
+}
+
+.status-icon.cancelled {
+    color: var(--mud-palette-text-secondary);
+}
+
+tbody tr:hover td {
+    background: var(--mud-palette-action-default-hover);
+}
+
+tbody tr:hover .col-name,
+tbody tr:hover .col-balance {
+    background: var(--mud-palette-action-default-hover) !important;
+}

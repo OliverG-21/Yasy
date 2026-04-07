@@ -1,0 +1,338 @@
+@page "/kurse/{CourseId:guid}/anmeldeliste"
+@using Yasy.Core.Entities
+@using Yasy.Core.Interfaces
+@using Yasy.Shared.Enums
+@inject ICourseRepository CourseRepo
+@inject ICourseEnrollmentRepository EnrollmentRepo
+@inject ICourseCardRepository CardRepo
+@inject IAttendanceRepository AttendanceRepo
+@inject NavigationManager Nav
+
+<PageTitle>Yasy - Anmeldeliste</PageTitle>
+
+@if (_course is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <div class="attendance-page">
+        @* Header *@
+        <div class="attendance-header">
+            <div>
+                <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Variant="Variant.Text" Size="Size.Small"
+                           OnClick="GoBack">Zurück</MudButton>
+            </div>
+            <div class="attendance-title">
+                <MudText Typo="Typo.h5">@_course.Name</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @if (_course.DayOfWeek.HasValue)
+                    {
+                        @($"{DayNames[(int)_course.DayOfWeek.Value]}")
+                    }
+                    @if (_course.StartTime.HasValue)
+                    {
+                        @($" · {_course.StartTime.Value:HH:mm} Uhr")
+                    }
+                    @if (_course.DurationMinutes.HasValue)
+                    {
+                        @($" · {_course.DurationMinutes} Min.")
+                    }
+                </MudText>
+            </div>
+            <div class="attendance-quarter-nav">
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" OnClick="PrevQuarter" />
+                <MudText Typo="Typo.subtitle1"><strong>Q@_quarter @_year</strong></MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" OnClick="NextQuarter" />
+            </div>
+        </div>
+
+        @* Table *@
+        <div class="attendance-table-wrapper">
+            <table class="attendance-table">
+                <thead>
+                    <tr>
+                        <th class="col-name">Kunde</th>
+                        <th class="col-balance">Guthaben</th>
+                        @foreach (var date in _dates)
+                        {
+                            var isCancelled = _cancelledDates.Contains(date);
+                            var isToday = date == DateOnly.FromDateTime(DateTime.Today);
+                            <th class="col-date @(isCancelled ? "cancelled-col" : "") @(isToday ? "today-col" : "")">
+                                <div>@date.ToString("dd.MM")</div>
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_enrollments is not null)
+                    {
+                        @foreach (var enrollment in _enrollments)
+                        {
+                            var customer = enrollment.Customer;
+                            var balance = GetBalance(customer.Id);
+
+                            <tr>
+                                <td class="col-name">
+                                    <MudText Typo="Typo.body2">@customer.LastName, @customer.FirstName</MudText>
+                                </td>
+                                <td class="col-balance">
+                                    @if (balance.HasValue)
+                                    {
+                                        <MudChip T="string" Size="Size.Small"
+                                                 Color="@(balance.Value.remaining <= 2 ? (balance.Value.remaining <= 1 ? Color.Error : Color.Warning) : Color.Default)">
+                                            @balance.Value.remaining/@balance.Value.total
+                                        </MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">–</MudText>
+                                    }
+                                </td>
+                                @for (var di = 0; di < _dates.Count; di++)
+                                {
+                                    var dateIndex = di;
+                                    var customerIndex = enrollment.Customer.Id;
+                                    var cellDate = _dates[dateIndex];
+                                    var cellCustomerId = customerIndex;
+                                    var cellCancelled = _cancelledDates.Contains(cellDate);
+                                    var cellStatus = GetStatus(cellCustomerId, cellDate);
+
+                                    <td class="col-date @(cellCancelled ? "cancelled-col" : "")"
+                                        @onclick="() => OnCellClick(cellCustomerId, cellDate, cellCancelled)"
+                                        @onclick:stopPropagation="true">
+                                        @if (cellCancelled)
+                                        {
+                                            <span class="status-icon cancelled">–</span>
+                                        }
+                                        else if (cellStatus == AttendanceStatus.Present)
+                                        {
+                                            var hasUsage = HasCardUsage(cellCustomerId, cellDate);
+                                            <span class="status-icon @(hasUsage ? "present" : "no-credit")">✓</span>
+                                        }
+                                        else if (cellStatus == AttendanceStatus.Absent)
+                                        {
+                                            <span class="status-icon absent">A</span>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid CourseId { get; set; }
+
+    private Course? _course;
+    private List<CourseEnrollment>? _enrollments;
+    private List<AttendanceRecord> _records = [];
+    private HashSet<DateOnly> _cancelledDates = [];
+    private List<DateOnly> _dates = [];
+    private Dictionary<Guid, (int remaining, int total)> _balances = new();
+    private HashSet<(Guid customerId, DateOnly date)> _bookedUsages = new();
+    private int _quarter;
+    private int _year;
+
+    private static readonly string[] DayNames = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateTime.Today;
+        _quarter = (today.Month - 1) / 3 + 1;
+        _year = today.Year;
+
+        _course = await CourseRepo.GetByIdAsync(CourseId);
+        if (_course is null) return;
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (_course is null) return;
+
+        var (from, to) = GetQuarterRange();
+        _dates = GenerateCourseDates(from, to);
+
+        _enrollments = await EnrollmentRepo.GetActiveByCourseAsync(CourseId);
+        _records = await AttendanceRepo.GetByCourseAndRangeAsync(CourseId, from, to);
+
+        var cancellations = await GetCancelledDatesAsync(from, to);
+        _cancelledDates = cancellations;
+
+        await LoadBalancesAsync();
+    }
+
+    private (DateOnly from, DateOnly to) GetQuarterRange()
+    {
+        var startMonth = (_quarter - 1) * 3 + 1;
+        var from = new DateOnly(_year, startMonth, 1);
+        var to = from.AddMonths(3).AddDays(-1);
+        return (from, to);
+    }
+
+    private List<DateOnly> GenerateCourseDates(DateOnly from, DateOnly to)
+    {
+        if (_course?.DayOfWeek is null) return [];
+
+        var dates = new List<DateOnly>();
+        var current = from;
+        while (current.DayOfWeek != _course.DayOfWeek.Value && current <= to)
+            current = current.AddDays(1);
+
+        while (current <= to)
+        {
+            dates.Add(current);
+            current = current.AddDays(7);
+        }
+        return dates;
+    }
+
+    private async Task<HashSet<DateOnly>> GetCancelledDatesAsync(DateOnly from, DateOnly to)
+    {
+        // Reuse existing course cancellations from ICourseRepository
+        var cancellations = await CourseRepo.GetCancellationsAsync(from, to);
+        return cancellations
+            .Where(c => c.CourseId == CourseId)
+            .Select(c => c.Date)
+            .ToHashSet();
+    }
+
+    private async Task LoadBalancesAsync()
+    {
+        _balances.Clear();
+        _bookedUsages.Clear();
+        if (_enrollments is null) return;
+
+        foreach (var enrollment in _enrollments)
+        {
+            var cards = await CardRepo.GetAllByCustomerAsync(enrollment.CustomerId);
+            var totalRemaining = cards.Sum(c => c.RemainingVisits);
+            var totalAll = cards.Sum(c => c.TotalVisits);
+            if (totalAll > 0)
+                _balances[enrollment.CustomerId] = (totalRemaining, totalAll);
+
+            // Collect all booked usages for this course (own or shared)
+            foreach (var card in cards)
+            {
+                foreach (var usage in card.Usages.Where(u => u.CourseId == CourseId))
+                {
+                    // UsedByCustomerId indicates who actually used the visit
+                    var actualUser = usage.UsedByCustomerId ?? enrollment.CustomerId;
+                    _bookedUsages.Add((actualUser, usage.UsedAt));
+                }
+            }
+        }
+    }
+
+    private bool HasCardUsage(Guid customerId, DateOnly date)
+    {
+        return _bookedUsages.Contains((customerId, date));
+    }
+
+    private AttendanceStatus? GetStatus(Guid customerId, DateOnly date)
+    {
+        var record = _records.FirstOrDefault(r => r.CustomerId == customerId && r.Date == date);
+        return record?.Status;
+    }
+
+    private (int remaining, int total)? GetBalance(Guid customerId)
+    {
+        return _balances.TryGetValue(customerId, out var b) ? b : null;
+    }
+
+    private bool _isProcessing;
+
+    private async Task OnCellClick(Guid customerId, DateOnly date, bool isCancelled)
+    {
+        if (isCancelled || _isProcessing) return;
+        await ToggleStatus(customerId, date);
+    }
+
+    private async Task ToggleStatus(Guid customerId, DateOnly date)
+    {
+        if (_isProcessing) return;
+        _isProcessing = true;
+        try
+        {
+            await ToggleStatusCore(customerId, date);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task ToggleStatusCore(Guid customerId, DateOnly date)
+    {
+        if (_cancelledDates.Contains(date)) return;
+
+        var current = GetStatus(customerId, date);
+        if (current is null)
+        {
+            // Mark present → book usage from card
+            await AttendanceRepo.SetStatusAsync(CourseId, customerId, date, AttendanceStatus.Present);
+            await BookCardUsageAsync(customerId, date);
+        }
+        else if (current == AttendanceStatus.Present)
+        {
+            // Present → Absent: reverse the card usage
+            await AttendanceRepo.SetStatusAsync(CourseId, customerId, date, AttendanceStatus.Absent);
+            await CardRepo.RemoveUsageAsync(customerId, CourseId, date);
+        }
+        else
+        {
+            // Absent → remove record
+            await AttendanceRepo.RemoveAsync(CourseId, customerId, date);
+        }
+
+        var (from, to) = GetQuarterRange();
+        _records = await AttendanceRepo.GetByCourseAndRangeAsync(CourseId, from, to);
+        await LoadBalancesAsync();
+    }
+
+    private async Task BookCardUsageAsync(Guid customerId, DateOnly date)
+    {
+        // Get all cards available to this customer (own + explicitly shared)
+        var availableCards = await CardRepo.GetAvailableForCustomerAsync(customerId);
+        var card = availableCards
+            .Where(c => c.RemainingVisits > 0)
+            .OrderBy(c => c.CustomerId == customerId ? 0 : 1) // prefer own cards
+            .ThenBy(c => c.PurchasedAt)
+            .FirstOrDefault();
+
+        if (card is not null)
+        {
+            var isShared = card.CustomerId != customerId;
+            await CardRepo.AddUsageAsync(new CardUsage
+            {
+                CourseCardId = card.Id,
+                CourseId = CourseId,
+                UsedByCustomerId = isShared ? customerId : null,
+                UsedAt = date
+            });
+        }
+        // No card available — attendance is recorded without card deduction (red checkmark)
+    }
+
+    private async Task PrevQuarter()
+    {
+        _quarter--;
+        if (_quarter < 1) { _quarter = 4; _year--; }
+        await LoadDataAsync();
+    }
+
+    private async Task NextQuarter()
+    {
+        _quarter++;
+        if (_quarter > 4) { _quarter = 1; _year++; }
+        await LoadDataAsync();
+    }
+
+    private void GoBack() => Nav.NavigateTo("/kurse");
+}

@@ -148,3 +148,46 @@
     height: 100%;
     opacity: 0.5;
 }
+
+/* Mobile back button - hidden on desktop */
+.mobile-back-bar {
+    display: none;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .customer-master-detail {
+        border: none;
+        border-radius: 0;
+    }
+
+    .customer-list-panel {
+        width: 100%;
+        min-width: 0;
+        border-right: none;
+    }
+
+    .customer-detail-panel {
+        display: none;
+    }
+
+    /* When detail is active on mobile: hide list, show detail */
+    .customer-master-detail.detail-active .customer-list-panel {
+        display: none;
+    }
+
+    .customer-master-detail.detail-active .customer-detail-panel {
+        display: block;
+        width: 100%;
+    }
+
+    .mobile-back-bar {
+        display: block;
+    }
+
+    ::deep .customer-detail-content {
+        padding: 16px;
+    }
+}

@@ -1,0 +1,111 @@
+@page "/kalender"
+@using Yasy.Server.Models
+@using Yasy.Server.Services
+@inject CalendarService CalendarService
+
+<PageTitle>Yasy - Kalender</PageTitle>
+
+<MudCalendar T="CourseCalendarItem" Items="_items" DateRangeChanged="OnDateRangeChanged"
+             ItemClicked="OnItemClicked" ShowWorkWeek="false"
+             Style="height: calc(100vh - 120px); overflow: auto;">
+    <CellTemplate>
+        <div style="@GetItemStyle(context)">
+            @context.Text
+        </div>
+    </CellTemplate>
+</MudCalendar>
+
+@if (_selectedItem is not null)
+{
+    <MudOverlay Visible="true" OnClick="ClosePopup" DarkBackground="true" ZIndex="9999" LockScroll="false">
+        <MudCard Class="pa-2" Style="min-width: 300px;" @onclick:stopPropagation="true" Elevation="8">
+            <MudCardContent>
+                <div class="d-flex align-center gap-2 mb-2">
+                    <MudIcon Icon="@(_selectedItem.Category == "Workshop" ? Icons.Material.Filled.Event : Icons.Material.Filled.Loop)"
+                             Color="Color.Primary" Size="Size.Small" />
+                    <MudText Typo="Typo.subtitle1">
+                        <strong>@(_selectedItem.IsCancelled ? _selectedItem.Text[2..] : _selectedItem.Text)</strong>
+                    </MudText>
+                </div>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @_selectedItem.Start.ToString("dddd, dd.MM.yyyy", _culture)
+                    · @_selectedItem.Start.ToString("HH:mm")–@(_selectedItem.End?.ToString("HH:mm"))
+                </MudText>
+                @if (_selectedItem.IsCancelled)
+                {
+                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Class="mt-2">Abgesagt</MudChip>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                @if (_selectedItem.IsCancelled)
+                {
+                    <MudButton StartIcon="@Icons.Material.Filled.Undo" Color="Color.Success"
+                               Variant="Variant.Text" Size="Size.Small"
+                               OnClick="() => ToggleCancel(_selectedItem)">
+                        Wieder aktivieren
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton StartIcon="@Icons.Material.Filled.Cancel" Color="Color.Error"
+                               Variant="Variant.Text" Size="Size.Small"
+                               OnClick="() => ToggleCancel(_selectedItem)">
+                        Absagen
+                    </MudButton>
+                }
+                <MudSpacer />
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClosePopup" />
+            </MudCardActions>
+        </MudCard>
+    </MudOverlay>
+}
+
+@code {
+    private List<CourseCalendarItem> _items = [];
+    private CourseCalendarItem? _selectedItem;
+    private DateRange _currentRange = new(DateTime.Today.AddMonths(-1), DateTime.Today.AddMonths(2));
+    private static readonly System.Globalization.CultureInfo _culture = System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEventsAsync();
+    }
+
+    private async Task OnDateRangeChanged(DateRange range)
+    {
+        _currentRange = range;
+        await LoadEventsAsync();
+    }
+
+    private async Task LoadEventsAsync()
+    {
+        var from = DateOnly.FromDateTime(_currentRange.Start ?? DateTime.Today.AddMonths(-1));
+        var to = DateOnly.FromDateTime(_currentRange.End ?? DateTime.Today.AddMonths(2));
+        _items = await CalendarService.GetEventsAsync(from, to);
+    }
+
+    private void OnItemClicked(CourseCalendarItem item)
+    {
+        _selectedItem = item;
+    }
+
+    private void ClosePopup() => _selectedItem = null;
+
+    private async Task ToggleCancel(CourseCalendarItem item)
+    {
+        if (item.SourceId is null) return;
+        var date = DateOnly.FromDateTime(item.Start);
+        await CalendarService.ToggleCancellationAsync(item.SourceId.Value, date, item.IsCancelled);
+        _selectedItem = null;
+        await LoadEventsAsync();
+    }
+
+    private string GetItemStyle(CourseCalendarItem item)
+    {
+        if (item.IsCancelled)
+            return "opacity: 0.5; text-decoration: line-through; background: var(--mud-palette-error); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;";
+
+        var color = item.Category == "Workshop" ? "warning" : "info";
+        return $"background: var(--mud-palette-{color}); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;";
+    }
+}

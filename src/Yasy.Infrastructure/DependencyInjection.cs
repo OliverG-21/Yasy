@@ -15,6 +15,10 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString));
 
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICourseRepository, CourseRepository>();
+        services.AddScoped<ICourseEnrollmentRepository, CourseEnrollmentRepository>();
+        services.AddScoped<ICourseCardRepository, CourseCardRepository>();
+        services.AddScoped<IAttendanceRepository, AttendanceRepository>();
         services.AddSingleton<IProfileImageService>(new ProfileImageService(dataPath));
 
         return services;
